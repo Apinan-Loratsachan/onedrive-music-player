@@ -5,8 +5,9 @@ import { LogOut, Music, User } from "lucide-react";
 import StickyPlayer from "@/components/StickyPlayer";
 import FileExplorer from "@/components/FileExplorer";
 import ScanManager from "@/components/ScanManager";
+import TrackList from "@/components/TrackList";
 import Login from "@/components/Login";
-import { Button, Spinner } from "@heroui/react";
+import { Button, Spinner, Tab, Tabs } from "@heroui/react";
 
 interface MusicFile {
   id: string;
@@ -23,6 +24,26 @@ export default function Home() {
   const [currentTrack, setCurrentTrack] = useState<MusicFile | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [cachedTracks, setCachedTracks] = useState<MusicFile[]>([]);
+  const [shuffleEnabled, setShuffleEnabled] = useState<boolean>(() => {
+    try {
+      if (typeof window === "undefined") return false;
+      const saved = window.localStorage.getItem("player_shuffleEnabled");
+      return saved === "1" || saved === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [repeatMode, setRepeatMode] = useState<0 | 1 | 2>(() => {
+    try {
+      if (typeof window === "undefined") return 0;
+      const saved = window.localStorage.getItem("player_repeatMode");
+      const n = Number(saved);
+      return n === 1 || n === 2 ? (n as 1 | 2) : 0;
+    } catch {
+      return 0;
+    }
+  });
 
   useEffect(() => {
     // Check if we're returning from OAuth with an error
@@ -70,21 +91,87 @@ export default function Home() {
     }
   };
 
+  // Load cached tracks once authenticated
+  useEffect(() => {
+    const loadCache = async () => {
+      try {
+        const resp = await fetch("/api/music/cache");
+        if (resp.ok) {
+          const data = await resp.json();
+          setCachedTracks(Array.isArray(data.tracks) ? data.tracks : []);
+        }
+      } catch {}
+    };
+    if (isAuthenticated) {
+      loadCache();
+    } else {
+      setCachedTracks([]);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "player_shuffleEnabled",
+        shuffleEnabled ? "1" : "0"
+      );
+    } catch {}
+  }, [shuffleEnabled]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("player_repeatMode", String(repeatMode));
+    } catch {}
+  }, [repeatMode]);
+
   const handleTrackSelect = (track: MusicFile) => {
     setCurrentTrack(track);
     setIsPlaying(true);
   };
 
   const handleNext = () => {
-    // For now, next/previous functionality is limited since we don't have a playlist
-    // This could be enhanced later to remember recently played tracks
-    console.log("Next track - not implemented in explorer mode");
+    if (!currentTrack || cachedTracks.length === 0) {
+      console.log("Next track - no cache available or no current track");
+      return;
+    }
+    if (shuffleEnabled) {
+      // pick a random index different from current when possible
+      let nextIndex = Math.floor(Math.random() * cachedTracks.length);
+      const currentIndex = cachedTracks.findIndex(
+        (t) => t.id === currentTrack.id
+      );
+      if (cachedTracks.length > 1 && nextIndex === currentIndex) {
+        nextIndex = (nextIndex + 1) % cachedTracks.length;
+      }
+      setCurrentTrack(cachedTracks[nextIndex]);
+      setIsPlaying(true);
+    } else {
+      const index = cachedTracks.findIndex((t) => t.id === currentTrack.id);
+      if (index >= 0 && index < cachedTracks.length - 1) {
+        setCurrentTrack(cachedTracks[index + 1]);
+        setIsPlaying(true);
+      } else if (repeatMode === 1) {
+        // wrap to start when repeat all
+        setCurrentTrack(cachedTracks[0]);
+        setIsPlaying(true);
+      } else {
+        console.log("Next track - at end of cached list");
+      }
+    }
   };
 
   const handlePrevious = () => {
-    // For now, previous functionality is limited since we don't have a playlist
-    // This could be enhanced later to remember recently played tracks
-    console.log("Previous track - not implemented in explorer mode");
+    if (!currentTrack || cachedTracks.length === 0) {
+      console.log("Previous track - no cache available or no current track");
+      return;
+    }
+    const index = cachedTracks.findIndex((t) => t.id === currentTrack.id);
+    if (index > 0) {
+      setCurrentTrack(cachedTracks[index - 1]);
+      setIsPlaying(true);
+    } else {
+      console.log("Previous track - at start of cached list");
+    }
   };
 
   const handleLogout = () => {
@@ -148,21 +235,42 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <main className="max-h-screen px-4 sm:px-6 lg:px-8 py-8">
-        <div className="max-h-screen grid grid-cols-1 gap-4 h-full">
+      <main className="px-4 sm:px-6 lg:px-8 pt-8 flex flex-col overflow-hidden h-[max(calc(100vh-64px-82px),_700px)]">
+        <div className="flex flex-col gap-4 h-full min-h-0">
           {/* Scan Manager */}
-          <div className="mb-6">
+          <div>
             <ScanManager />
           </div>
 
-          {/* File Explorer - Full Width */}
-          <div className="max-h-[calc(100vh-39rem)]">
-            <FileExplorer
-              onTrackSelect={handleTrackSelect}
-              currentTrackId={currentTrack?.id || null}
-              isPlaying={isPlaying}
-            />
-          </div>
+          {/* File Explorer / Track List area fills remaining height */}
+          <Tabs fullWidth className="flex-1 min-h-5" color="primary">
+            <Tab
+              key="explorer"
+              title="Explorer"
+              className="h-full overflow-hidden"
+            >
+              <div className="h-full min-h-0 pb-6">
+                <FileExplorer
+                  onTrackSelect={handleTrackSelect}
+                  currentTrackId={currentTrack?.id || null}
+                  isPlaying={isPlaying}
+                />
+              </div>
+            </Tab>
+            <Tab
+              key="track-list"
+              title="Track List"
+              className="h-full overflow-hidden"
+            >
+              <div className="h-full min-h-0 pb-6">
+                <TrackList
+                  onTrackSelect={handleTrackSelect}
+                  currentTrackId={currentTrack?.id || null}
+                  isPlaying={isPlaying}
+                />
+              </div>
+            </Tab>
+          </Tabs>
         </div>
       </main>
 
@@ -171,10 +279,26 @@ export default function Home() {
         currentTrack={currentTrack}
         onNext={handleNext}
         onPrevious={handlePrevious}
-        hasNext={false}
-        hasPrevious={false}
+        hasNext={(() => {
+          if (!currentTrack || cachedTracks.length === 0) return false;
+          if (shuffleEnabled) return cachedTracks.length > 1; // can always pick another when >1
+          if (repeatMode === 1) return true; // wrap allowed
+          const idx = cachedTracks.findIndex((t) => t.id === currentTrack.id);
+          return idx >= 0 && idx < cachedTracks.length - 1;
+        })()}
+        hasPrevious={(() => {
+          if (!currentTrack || cachedTracks.length === 0) return false;
+          const idx = cachedTracks.findIndex((t) => t.id === currentTrack.id);
+          return idx > 0;
+        })()}
         isPlaying={isPlaying}
         onPlayPauseChange={setIsPlaying}
+        shuffleEnabled={shuffleEnabled}
+        onToggleShuffle={() => setShuffleEnabled((s) => !s)}
+        repeatMode={repeatMode}
+        onCycleRepeatMode={() =>
+          setRepeatMode((m) => ((m + 1) % 3) as 0 | 1 | 2)
+        }
       />
     </div>
   );

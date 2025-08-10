@@ -158,11 +158,11 @@ export default function FileExplorer({
 
   if (loading) {
     return (
-      <Card className="shadow-lg">
-        <CardBody className="p-6 overflow-auto">
-          <div className="flex items-center justify-center">
+      <Card className="shadow-lg flex h-full">
+        <CardBody className="p-6 overflow-auto h-full items-center justify-center">
+          <div className="flex flex-col items-center justify-center">
             <Spinner size="lg" color="primary" />
-            <span className="ml-2 text-gray-600 dark:text-gray-400">
+            <span className="mt-2 text-gray-600 dark:text-gray-400">
               Loading contents...
             </span>
           </div>

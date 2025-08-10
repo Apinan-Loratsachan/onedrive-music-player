@@ -10,8 +10,9 @@ import {
   VolumeX,
   Shuffle,
   Repeat,
+  Repeat1,
 } from "lucide-react";
-import { Button, Slider } from "@heroui/react";
+import { Button, Slider, Switch } from "@heroui/react";
 
 interface StickyPlayerProps {
   currentTrack: {
@@ -28,6 +29,10 @@ interface StickyPlayerProps {
   hasPrevious: boolean;
   isPlaying: boolean;
   onPlayPauseChange: (playing: boolean) => void;
+  shuffleEnabled: boolean;
+  onToggleShuffle: () => void;
+  repeatMode: 0 | 1 | 2;
+  onCycleRepeatMode: () => void;
 }
 
 export default function StickyPlayer({
@@ -38,6 +43,10 @@ export default function StickyPlayer({
   hasPrevious,
   isPlaying: externalIsPlaying,
   onPlayPauseChange,
+  shuffleEnabled,
+  onToggleShuffle,
+  repeatMode,
+  onCycleRepeatMode,
 }: StickyPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -47,6 +56,19 @@ export default function StickyPlayer({
   const [isBuffering, setIsBuffering] = useState(false);
   const [pendingSeekTime, setPendingSeekTime] = useState<number | null>(null);
   const [isSeeking, setIsSeeking] = useState(false);
+  const [playSwitchSelected, setPlaySwitchSelected] = useState<boolean>(() => {
+    try {
+      if (typeof window === "undefined") return false;
+      const saved = window.localStorage.getItem(
+        "stickyPlayer_playSwitchSelected"
+      );
+      if (saved === "1" || saved === "true") return true;
+      if (saved === "0" || saved === "false") return false;
+      return false;
+    } catch {
+      return false;
+    }
+  });
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -84,8 +106,24 @@ export default function StickyPlayer({
     };
     const updateDuration = () => setDuration(audio.duration);
     const handleEnded = () => {
+      // Autoplay behaviors gated by the playSwitchSelected toggle
+      if (!playSwitchSelected) {
+        setIsPlaying(false);
+        return;
+      }
+      // Repeat current track
+      if (repeatMode === 2) {
+        if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(() => undefined);
+          setIsPlaying(true);
+        }
+        return;
+      }
       setIsPlaying(false);
-      onNext();
+      if (hasNext || repeatMode === 1) {
+        onNext();
+      }
     };
     const handleWaiting = () => setIsBuffering(true);
     const handleCanPlay = () => setIsBuffering(false);
@@ -100,13 +138,13 @@ export default function StickyPlayer({
 
     return () => {
       audio.removeEventListener("timeupdate", updateTime);
-      audio.removeEventListener("loadedmetadata", updateTime);
+      audio.removeEventListener("loadedmetadata", updateDuration);
       audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("waiting", handleWaiting);
       audio.removeEventListener("canplay", handleCanPlay);
       audio.removeEventListener("canplaythrough", handleCanPlayThrough);
     };
-  }, [onNext, isSeeking]);
+  }, [onNext, isSeeking, hasNext, playSwitchSelected, repeatMode]);
 
   // Debounce committing seek to the audio element by 1s after user stops changing the slider
   useEffect(() => {
@@ -119,6 +157,16 @@ export default function StickyPlayer({
     }, 500);
     return () => clearTimeout(timeoutId);
   }, [pendingSeekTime]);
+
+  // Persist play/pause switch selection
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "stickyPlayer_playSwitchSelected",
+        playSwitchSelected ? "1" : "0"
+      );
+    } catch {}
+  }, [playSwitchSelected]);
 
   const togglePlayPause = () => {
     if (audioRef.current) {
@@ -179,7 +227,8 @@ export default function StickyPlayer({
         <div className="relative">
           <div className="px-5 relative">
             <Slider
-              size="sm"
+              // size="sm"
+              step={0.01}
               minValue={0}
               maxValue={
                 Number.isFinite(duration) && duration > 0 ? duration : 1
@@ -202,9 +251,9 @@ export default function StickyPlayer({
               isDisabled={
                 !Number.isFinite(duration) || duration === 0 || isBuffering
               }
-              className="w-full absolute -top-3 left-0"
+              className="w-full absolute -top-4 left-0"
               classNames={{
-                track: "bg-gray-200 dark:bg-gray-700 h-1",
+                track: "bg-gray-200 dark:bg-gray-700",
                 filler: "bg-blue-600",
                 thumb: "bg-blue-600",
               }}
@@ -276,7 +325,7 @@ export default function StickyPlayer({
                 variant="light"
                 size="sm"
                 onPress={onNext}
-                isDisabled={!hasNext}
+                isDisabled={!hasNext && !shuffleEnabled && repeatMode !== 1}
                 className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
               >
                 <SkipForward size={18} />
@@ -286,21 +335,48 @@ export default function StickyPlayer({
             {/* Right: Volume and Additional Controls */}
             <div className="flex items-center space-x-3 flex-1 justify-end">
               <div className="hidden sm:flex items-center space-x-2">
+                <Switch
+                  isSelected={playSwitchSelected}
+                  onValueChange={setPlaySwitchSelected}
+                  thumbIcon={({ isSelected }) =>
+                    isSelected ? (
+                      <i className="fa-solid fa-play text-black translate-x-[1px]" />
+                    ) : (
+                      <i className="fa-solid fa-pause" />
+                    )
+                  }
+                />
                 <Button
                   isIconOnly
-                  variant="light"
+                  variant={shuffleEnabled ? "shadow" : "light"}
+                  color={shuffleEnabled ? "primary" : "default"}
                   size="sm"
-                  className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  onPress={onToggleShuffle}
+                  className={`${
+                    shuffleEnabled
+                      ? "text-white"
+                      : "text-gray-600 hover:text-gray-900"
+                  } dark:text-gray-400 dark:hover:text-white`}
                 >
-                  <Shuffle size={16} />
+                  <Shuffle size={18} />
                 </Button>
                 <Button
                   isIconOnly
-                  variant="light"
+                  variant={repeatMode !== 0 ? "shadow" : "light"}
+                  color={repeatMode !== 0 ? "primary" : "default"}
                   size="sm"
-                  className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  onPress={onCycleRepeatMode}
+                  className={`${
+                    repeatMode !== 0
+                      ? "text-white"
+                      : "text-gray-600 hover:text-gray-900"
+                  } dark:text-gray-400 dark:hover:text-white`}
                 >
-                  <Repeat size={16} />
+                  {repeatMode === 2 ? (
+                    <Repeat1 size={18} />
+                  ) : (
+                    <Repeat size={18} />
+                  )}
                 </Button>
               </div>
 
@@ -322,6 +398,7 @@ export default function StickyPlayer({
                 // } overflow-hidden`}
                 >
                   <Slider
+                    aria-label="Volume"
                     size="sm"
                     step={0.01}
                     minValue={0}

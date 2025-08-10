@@ -10,6 +10,8 @@ import {
   Progress,
   Chip,
   Spinner,
+  Accordion,
+  AccordionItem,
 } from "@heroui/react";
 
 interface ScanState {
@@ -204,233 +206,255 @@ export default function ScanManager() {
 
   return (
     <Card className="shadow-lg">
-      <CardHeader className="px-6 py-4">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-lg font-semibold">Music Library Scanner</h3>
-          <div className="flex items-center space-x-2">
+      <CardBody className="px-6 py-4 space-y-4 overflow-hidden">
+        <Accordion>
+          <AccordionItem
+            key="scanning"
+            title={
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold">Music Library Scanner</h3>
+                <div className="flex items-center space-x-2">
+                  {isActive && (
+                    <Chip
+                      color="primary"
+                      variant="flat"
+                      startContent={
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      }
+                    >
+                      Scanning
+                    </Chip>
+                  )}
+                  {isStalled && (
+                    <Chip
+                      color="warning"
+                      variant="flat"
+                      startContent={<AlertCircle className="w-4 h-4" />}
+                    >
+                      Stalled
+                    </Chip>
+                  )}
+                  {isCompleted && (
+                    <Chip
+                      color="success"
+                      variant="flat"
+                      startContent={<CheckCircle className="w-4 h-4" />}
+                    >
+                      Completed
+                    </Chip>
+                  )}
+                  {hasError && (
+                    <Chip
+                      color="danger"
+                      variant="flat"
+                      startContent={<AlertCircle className="w-4 h-4" />}
+                    >
+                      Error
+                    </Chip>
+                  )}
+                </div>
+              </div>
+            }
+          >
+            {/* Progress Bar */}
             {isActive && (
-              <Chip
-                color="primary"
-                variant="flat"
-                startContent={<RefreshCw className="w-4 h-4 animate-spin" />}
-              >
-                Scanning
-              </Chip>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                  <span>Progress</span>
+                  <span>
+                    {typeof scanState.scaned === "number" &&
+                    typeof scanState.totalTopLevelFolders === "number"
+                      ? `${scanState.scaned} / ${scanState.totalTopLevelFolders}`
+                      : `${scanState.scannedPaths.length} folders scanned`}
+                  </span>
+                </div>
+                <Progress
+                  value={(() => {
+                    if (
+                      typeof scanState.scaned === "number" &&
+                      typeof scanState.totalTopLevelFolders === "number" &&
+                      scanState.totalTopLevelFolders > 0
+                    ) {
+                      return (
+                        (scanState.scaned / scanState.totalTopLevelFolders) *
+                        100
+                      );
+                    }
+                    // Fallback to rough folder count
+                    return scanState.scannedPaths.length > 0
+                      ? (scanState.scannedPaths.length /
+                          Math.max(scanState.scannedPaths.length + 1, 1)) *
+                          100
+                      : 0;
+                  })()}
+                  color="primary"
+                  className="w-full pb-3"
+                />
+              </div>
             )}
-            {isStalled && (
-              <Chip
-                color="warning"
-                variant="flat"
-                startContent={<AlertCircle className="w-4 h-4" />}
-              >
-                Stalled
-              </Chip>
+
+            {/* Current Status */}
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-gray-600 dark:text-gray-400">
+                  Status:
+                </span>
+                <span className="ml-2 font-medium">
+                  {isActive ? "Scanning..." : hasError ? "Error" : "Completed"}
+                </span>
+              </div>
+
+              {isActive && (
+                <div>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Current:
+                  </span>
+                  <span
+                    className="ml-2 font-medium truncate"
+                    title={
+                      scanState.currentTopLevelFolder || scanState.currentPath
+                    }
+                  >
+                    {(scanState.currentTopLevelFolder || scanState.currentPath)
+                      .split("/")
+                      .pop() || scanState.currentPath}
+                  </span>
+                </div>
+              )}
+
+              <div>
+                <span className="text-gray-600 dark:text-gray-400">
+                  Folders:
+                </span>
+                <span className="ml-2 font-medium">
+                  {scanState.scannedPaths.length}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-gray-600 dark:text-gray-400">
+                  Music Files:
+                </span>
+                <span className="ml-2 font-medium">
+                  {scanState.scanedMusicFile}
+                </span>
+              </div>
+
+              {isActive && (
+                <div className="col-span-2">
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Current subfolder:
+                  </span>
+                  <span
+                    className="ml-2 font-medium break-all"
+                    title={getCurrentSubfolderPath()}
+                  >
+                    {getCurrentSubfolderPath()}
+                  </span>
+                </div>
+              )}
+
+              <div>
+                <span className="text-gray-600 dark:text-gray-400">
+                  Started:
+                </span>
+                <span className="ml-2 font-medium">
+                  {formatTime(scanState.startTime)}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-gray-600 dark:text-gray-400">
+                  Duration:
+                </span>
+                <span className="ml-2 font-medium">
+                  {formatDuration(duration)}
+                </span>
+              </div>
+            </div>
+
+            {/* Error Display */}
+            {hasError && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                <p className="text-red-700 dark:text-red-300 text-sm">
+                  <strong>Error:</strong> {scanState.error}
+                </p>
+              </div>
             )}
-            {isCompleted && (
-              <Chip
-                color="success"
-                variant="flat"
+
+            {/* Last Updated */}
+            {lastChecked && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 text-center pt-5 pb-3">
+                Last updated: {lastChecked.toLocaleTimeString()}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex justify-center space-x-3">
+              {!isActive && (
+                <Button
+                  color="primary"
+                  onPress={startScan}
+                  disabled={isStarting}
+                  startContent={
+                    isStarting ? (
+                      <Spinner size="sm" />
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )
+                  }
+                >
+                  {isStarting ? "Starting..." : "Start New Scan"}
+                </Button>
+              )}
+
+              {(hasError || canResume) && (
+                <Button
+                  color="warning"
+                  onPress={resumeScan}
+                  startContent={<RefreshCw className="w-4 h-4" />}
+                >
+                  Resume Scan
+                </Button>
+              )}
+
+              <Button
+                variant="light"
+                onPress={checkScanStatus}
+                startContent={<RefreshCw className="w-4 h-4" />}
+              >
+                Refresh Status
+              </Button>
+
+              <Button
+                variant="light"
+                onPress={async () => {
+                  try {
+                    const response = await fetch("/api/music/scan?stats=true");
+                    if (response.ok) {
+                      const stats = await response.json();
+                      console.log("Cache Stats:", stats);
+                      alert(
+                        `Cache Stats:\nPaths: ${stats.totalPaths}\nFiles: ${
+                          stats.totalFiles
+                        }\nFolders: ${stats.totalFolders}\nLast Updated: ${
+                          stats.lastUpdated
+                            ? new Date(stats.lastUpdated).toLocaleString()
+                            : "Never"
+                        }`
+                      );
+                    }
+                  } catch (error) {
+                    console.error("Error getting cache stats:", error);
+                  }
+                }}
                 startContent={<CheckCircle className="w-4 h-4" />}
               >
-                Completed
-              </Chip>
-            )}
-            {hasError && (
-              <Chip
-                color="danger"
-                variant="flat"
-                startContent={<AlertCircle className="w-4 h-4" />}
-              >
-                Error
-              </Chip>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardBody className="px-6 py-4 space-y-4">
-        {/* Progress Bar */}
-        {isActive && (
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-              <span>Progress</span>
-              <span>
-                {typeof scanState.scaned === "number" &&
-                typeof scanState.totalTopLevelFolders === "number"
-                  ? `${scanState.scaned} / ${scanState.totalTopLevelFolders}`
-                  : `${scanState.scannedPaths.length} folders scanned`}
-              </span>
+                Cache Stats
+              </Button>
             </div>
-            <Progress
-              value={(() => {
-                if (
-                  typeof scanState.scaned === "number" &&
-                  typeof scanState.totalTopLevelFolders === "number" &&
-                  scanState.totalTopLevelFolders > 0
-                ) {
-                  return (
-                    (scanState.scaned / scanState.totalTopLevelFolders) * 100
-                  );
-                }
-                // Fallback to rough folder count
-                return scanState.scannedPaths.length > 0
-                  ? (scanState.scannedPaths.length /
-                      Math.max(scanState.scannedPaths.length + 1, 1)) *
-                      100
-                  : 0;
-              })()}
-              color="primary"
-              className="w-full"
-            />
-          </div>
-        )}
-
-        {/* Current Status */}
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-gray-600 dark:text-gray-400">Status:</span>
-            <span className="ml-2 font-medium">
-              {isActive ? "Scanning..." : hasError ? "Error" : "Completed"}
-            </span>
-          </div>
-
-          {isActive && (
-            <div>
-              <span className="text-gray-600 dark:text-gray-400">Current:</span>
-              <span
-                className="ml-2 font-medium truncate"
-                title={scanState.currentTopLevelFolder || scanState.currentPath}
-              >
-                {(scanState.currentTopLevelFolder || scanState.currentPath)
-                  .split("/")
-                  .pop() || scanState.currentPath}
-              </span>
-            </div>
-          )}
-
-          <div>
-            <span className="text-gray-600 dark:text-gray-400">Folders:</span>
-            <span className="ml-2 font-medium">
-              {scanState.scannedPaths.length}
-            </span>
-          </div>
-
-          <div>
-            <span className="text-gray-600 dark:text-gray-400">
-              Music Files:
-            </span>
-            <span className="ml-2 font-medium">
-              {scanState.scanedMusicFile}
-            </span>
-          </div>
-
-          {isActive && (
-            <div className="col-span-2">
-              <span className="text-gray-600 dark:text-gray-400">
-                Current subfolder:
-              </span>
-              <span
-                className="ml-2 font-medium break-all"
-                title={getCurrentSubfolderPath()}
-              >
-                {getCurrentSubfolderPath()}
-              </span>
-            </div>
-          )}
-
-          <div>
-            <span className="text-gray-600 dark:text-gray-400">Started:</span>
-            <span className="ml-2 font-medium">
-              {formatTime(scanState.startTime)}
-            </span>
-          </div>
-
-          <div>
-            <span className="text-gray-600 dark:text-gray-400">Duration:</span>
-            <span className="ml-2 font-medium">{formatDuration(duration)}</span>
-          </div>
-        </div>
-
-        {/* Error Display */}
-        {hasError && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-            <p className="text-red-700 dark:text-red-300 text-sm">
-              <strong>Error:</strong> {scanState.error}
-            </p>
-          </div>
-        )}
-
-        {/* Last Updated */}
-        {lastChecked && (
-          <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-            Last updated: {lastChecked.toLocaleTimeString()}
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex justify-center space-x-3">
-          {!isActive && (
-            <Button
-              color="primary"
-              onPress={startScan}
-              disabled={isStarting}
-              startContent={
-                isStarting ? (
-                  <Spinner size="sm" />
-                ) : (
-                  <Play className="w-4 h-4" />
-                )
-              }
-            >
-              {isStarting ? "Starting..." : "Start New Scan"}
-            </Button>
-          )}
-
-          {(hasError || canResume) && (
-            <Button
-              color="warning"
-              onPress={resumeScan}
-              startContent={<RefreshCw className="w-4 h-4" />}
-            >
-              Resume Scan
-            </Button>
-          )}
-
-          <Button
-            variant="light"
-            onPress={checkScanStatus}
-            startContent={<RefreshCw className="w-4 h-4" />}
-          >
-            Refresh Status
-          </Button>
-
-          <Button
-            variant="light"
-            onPress={async () => {
-              try {
-                const response = await fetch("/api/music/scan?stats=true");
-                if (response.ok) {
-                  const stats = await response.json();
-                  console.log("Cache Stats:", stats);
-                  alert(
-                    `Cache Stats:\nPaths: ${stats.totalPaths}\nFiles: ${
-                      stats.totalFiles
-                    }\nFolders: ${stats.totalFolders}\nLast Updated: ${
-                      stats.lastUpdated
-                        ? new Date(stats.lastUpdated).toLocaleString()
-                        : "Never"
-                    }`
-                  );
-                }
-              } catch (error) {
-                console.error("Error getting cache stats:", error);
-              }
-            }}
-            startContent={<CheckCircle className="w-4 h-4" />}
-          >
-            Cache Stats
-          </Button>
-        </div>
+          </AccordionItem>
+        </Accordion>
       </CardBody>
     </Card>
   );
