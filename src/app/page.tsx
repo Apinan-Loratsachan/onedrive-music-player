@@ -1,103 +1,181 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect } from "react";
+import { LogOut, Music, User } from "lucide-react";
+import StickyPlayer from "@/components/StickyPlayer";
+import FileExplorer from "@/components/FileExplorer";
+import ScanManager from "@/components/ScanManager";
+import Login from "@/components/Login";
+import { Button, Spinner } from "@heroui/react";
+
+interface MusicFile {
+  id: string;
+  name: string;
+  size: number;
+  title?: string;
+  artist?: string;
+  folder?: string;
+  lastModified?: string;
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentTrack, setCurrentTrack] = useState<MusicFile | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  useEffect(() => {
+    // Check if we're returning from OAuth with an error
+    const urlParams = new URLSearchParams(window.location.search);
+    const error = urlParams.get("error");
+
+    if (error) {
+      console.error("Authentication error:", error);
+      // Clear any error parameters from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    checkAuthStatus();
+
+    // Listen for page visibility changes (when user returns from OAuth)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        checkAuthStatus();
+      }
+    };
+
+    // Also check auth status periodically to catch token expiration
+    const intervalId = setInterval(checkAuthStatus, 30000); // Check every 30 seconds
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInterval(intervalId);
+    };
+  }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const response = await fetch("/api/music");
+      if (response.ok) {
+        setIsAuthenticated(true);
+      } else {
+        setIsAuthenticated(false);
+      }
+    } catch (error) {
+      setIsAuthenticated(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTrackSelect = (track: MusicFile) => {
+    setCurrentTrack(track);
+    setIsPlaying(true);
+  };
+
+  const handleNext = () => {
+    // For now, next/previous functionality is limited since we don't have a playlist
+    // This could be enhanced later to remember recently played tracks
+    console.log("Next track - not implemented in explorer mode");
+  };
+
+  const handlePrevious = () => {
+    // For now, previous functionality is limited since we don't have a playlist
+    // This could be enhanced later to remember recently played tracks
+    console.log("Previous track - not implemented in explorer mode");
+  };
+
+  const handleLogout = () => {
+    // Clear cookies by setting them to expire
+    document.cookie =
+      "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    document.cookie =
+      "refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    setIsAuthenticated(false);
+    setCurrentTrack(null);
+    setIsPlaying(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <Spinner size="lg" color="primary" className="mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Login />;
+  }
+
+  return (
+    <div className="w-full min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      {/* Header */}
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 left-0 w-full z-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <Music className="w-5 h-5 text-white" />
+              </div>
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                OneDrive Music Player
+              </h1>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                <User className="w-4 h-4" />
+                <span>Connected to OneDrive</span>
+              </div>
+              <Button
+                onPress={handleLogout}
+                variant="light"
+                size="sm"
+                startContent={<LogOut className="w-4 h-4" />}
+                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              >
+                Sign out
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-h-screen px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-h-screen grid grid-cols-1 gap-4 h-full">
+          {/* Scan Manager */}
+          <div className="mb-6">
+            <ScanManager />
+          </div>
+
+          {/* File Explorer - Full Width */}
+          <div className="max-h-[calc(100vh-39rem)]">
+            <FileExplorer
+              onTrackSelect={handleTrackSelect}
+              currentTrackId={currentTrack?.id || null}
+              isPlaying={isPlaying}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+          </div>
         </div>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+      {/* Sticky Bottom Player */}
+      <StickyPlayer
+        currentTrack={currentTrack}
+        onNext={handleNext}
+        onPrevious={handlePrevious}
+        hasNext={false}
+        hasPrevious={false}
+        isPlaying={isPlaying}
+        onPlayPauseChange={setIsPlaying}
+      />
     </div>
   );
 }
