@@ -263,8 +263,8 @@ export default function StickyPlayer({
           </div>
         </div>
 
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between max-w-7xl mx-auto">
+        <div className="px-14 py-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto">
             {/* Left: Track Info */}
             <div className="flex items-center space-x-4 min-w-0 flex-1">
               <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -329,7 +329,7 @@ export default function StickyPlayer({
 
             {/* Right: Volume and Additional Controls */}
             <div className="flex items-center space-x-3 flex-1 justify-end">
-              <div className="hidden sm:flex items-center space-x-2">
+              <div className="flex items-center space-x-2">
                 <Switch
                   isSelected={playSwitchSelected}
                   onValueChange={setPlaySwitchSelected}
