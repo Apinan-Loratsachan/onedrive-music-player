@@ -227,7 +227,7 @@ export default function StickyPlayer({
         <div className="relative">
           <div className="px-5 relative">
             <Slider
-              // size="sm"
+              size="sm"
               step={0.01}
               minValue={0}
               maxValue={
@@ -251,12 +251,7 @@ export default function StickyPlayer({
               isDisabled={
                 !Number.isFinite(duration) || duration === 0 || isBuffering
               }
-              className="w-full absolute -top-4 left-0"
-              classNames={{
-                track: "bg-gray-200 dark:bg-gray-700",
-                filler: "bg-blue-600",
-                thumb: "bg-blue-600",
-              }}
+              className="w-full absolute -top-3 left-0"
               aria-label="Seek"
             />
           </div>
