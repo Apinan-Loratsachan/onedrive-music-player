@@ -1,18 +1,38 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Music, Folder, Play, Pause, ArrowLeft, Home } from "lucide-react";
+import {
+  Music,
+  Folder,
+  Play,
+  Pause,
+  ArrowLeft,
+  Home,
+  FolderCheck,
+} from "lucide-react";
 import {
   Card,
   CardBody,
   CardHeader,
   Button,
+  Divider,
   Spinner,
-  Chip,
   Breadcrumbs,
   BreadcrumbItem,
-  Divider,
+  Chip,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
 } from "@heroui/react";
+import RootPathSelector from "./RootPathSelector";
+
+// Extend Window interface to include our custom function
+declare global {
+  interface Window {
+    resetScanManager?: () => void;
+  }
+}
 
 interface MusicFile {
   id: string;
@@ -29,40 +49,110 @@ interface FolderItem {
   id: string;
   name: string;
   folder: any;
+  webUrl?: string;
+  createdBy?: {
+    user: {
+      email: string;
+      id: string;
+      displayName: string;
+    };
+  };
 }
 
 interface FileExplorerProps {
   onTrackSelect: (track: MusicFile) => void;
   currentTrackId: string | null;
   isPlaying: boolean;
+  onRootPathChange?: () => void;
 }
 
 export default function FileExplorer({
   onTrackSelect,
   currentTrackId,
   isPlaying,
+  onRootPathChange,
 }: FileExplorerProps) {
   const [files, setFiles] = useState<MusicFile[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
-  const [currentPath, setCurrentPath] = useState(
-    "Music/Music Library/Main Library"
-  );
+  const [currentPath, setCurrentPath] = useState("");
+  const [rootPath, setRootPath] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pathHistory, setPathHistory] = useState<string[]>([
-    "Music/Music Library/Main Library",
-  ]);
+  const [pathHistory, setPathHistory] = useState<string[]>([]);
+  const [pathNotFound, setPathNotFound] = useState(false);
+  const [driveType, setDriveType] = useState<"personal" | "shared">("personal");
+  const [driveId, setDriveId] = useState("");
+  const [itemId, setItemId] = useState("");
 
   useEffect(() => {
-    fetchContents();
-  }, [currentPath]);
+    fetchUserSettings();
+  }, []);
+
+  useEffect(() => {
+    console.log("FileExplorer: rootPath changed to:", rootPath);
+    if (rootPath !== "") {
+      setCurrentPath(rootPath);
+      setPathHistory([rootPath]);
+      // Don't call fetchContents here, let the currentPath useEffect handle it
+    }
+  }, [rootPath]);
+
+  useEffect(() => {
+    console.log("FileExplorer: currentPath changed to:", currentPath);
+    if (currentPath !== "") {
+      fetchContents();
+    } else if (currentPath === "" && rootPath === "") {
+      // Special case: when both are empty, we're at OneDrive root
+      fetchContents();
+    }
+  }, [currentPath, rootPath, driveType, driveId, itemId]);
+
+  const fetchUserSettings = async () => {
+    try {
+      const response = await fetch("/api/user/settings");
+      if (response.ok) {
+        const settings = await response.json();
+        setRootPath(
+          settings.musicRootPath || "" // Empty string represents OneDrive root
+        );
+      } else {
+        // Fallback to default path
+        setRootPath("");
+      }
+    } catch (error) {
+      console.error("Error fetching user settings:", error);
+      // Fallback to default path
+      setRootPath("");
+    }
+  };
 
   const fetchContents = async () => {
+    console.log(
+      "FileExplorer: fetchContents called with currentPath:",
+      currentPath
+    );
+
     try {
       setLoading(true);
-      const response = await fetch(
-        `/api/music?path=${encodeURIComponent(currentPath)}`
-      );
+      setError(null); // Clear any previous errors
+      setPathNotFound(false); // Clear any previous path not found state
+
+      // Handle empty path (OneDrive root) properly
+      let queryParams = new URLSearchParams();
+      if (currentPath !== "") {
+        queryParams.append("path", currentPath);
+      }
+      if (driveType !== "personal") {
+        queryParams.append("driveType", driveType);
+        if (driveId) queryParams.append("driveId", driveId);
+        if (itemId) queryParams.append("itemId", itemId);
+      }
+
+      const queryString = queryParams.toString();
+      const apiUrl = `/api/music${queryString ? `?${queryString}` : ""}`;
+      console.log("FileExplorer: Calling API:", apiUrl);
+
+      const response = await fetch(apiUrl);
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -74,21 +164,51 @@ export default function FileExplorer({
       }
 
       const data = await response.json();
+      console.log("FileExplorer: API response data:", data);
+
       setFiles(data.files || []);
       setFolders(data.folders || []);
-      setCurrentPath(data.currentPath || currentPath);
+      setPathNotFound(data.pathNotFound || false);
+      setDriveType(data.driveType || "personal");
+      setDriveId(data.driveId || "");
+      setItemId(data.itemId || "");
+      if (data.pathNotFound) {
+        setRootPath("");
+      }
+      // Don't update currentPath here to avoid infinite loops
+      // setCurrentPath(data.currentPath || currentPath);
     } catch (err) {
       setError("Error loading contents");
       console.error("Error fetching contents:", err);
     } finally {
       setLoading(false);
+      console.log(
+        "FileExplorer: fetchContents completed, loading set to false"
+      );
     }
   };
 
-  const navigateToFolder = (folderName: string) => {
-    const newPath = currentPath + "/" + folderName;
+  const navigateToFolder = (folder: FolderItem) => {
+    const newPath = currentPath + "/" + folder.name;
     setPathHistory([...pathHistory, newPath]);
     setCurrentPath(newPath);
+    setPathNotFound(false); // Clear path not found state when navigating
+
+    // If we're in a shared drive, extract drive and item IDs for navigation
+    if (driveType === "shared" && folder.folder) {
+      if (folder.id) {
+        setItemId(folder.id);
+      }
+
+      // Extract drive ID from webUrl if available
+      if (folder.webUrl) {
+        const urlParams = new URLSearchParams(folder.webUrl.split("?")[1]);
+        const cid = urlParams.get("cid");
+        if (cid) {
+          setDriveId(cid);
+        }
+      }
+    }
   };
 
   const navigateBack = () => {
@@ -97,13 +217,54 @@ export default function FileExplorer({
       const newPath = newHistory[newHistory.length - 1];
       setPathHistory(newHistory);
       setCurrentPath(newPath);
+      setPathNotFound(false); // Clear path not found state when navigating
+
+      // If navigating back to shared root, clear drive-specific IDs
+      if (newPath === "shared") {
+        setDriveId("");
+        setItemId("");
+      }
     }
   };
 
-  const navigateHome = () => {
-    const homePath = "Music/Music Library/Main Library";
-    setPathHistory([homePath]);
-    setCurrentPath(homePath);
+  const handleRootPathChange = (newRootPath: string) => {
+    setRootPath(newRootPath);
+    setCurrentPath(newRootPath);
+    setPathHistory([newRootPath]);
+    // Clear current data to force refresh
+    setFiles([]);
+    setFolders([]);
+    setPathNotFound(false); // Clear path not found state
+
+    // Reset scan manager state to "not scanning"
+    if (typeof window !== "undefined" && window.resetScanManager) {
+      window.resetScanManager();
+    }
+
+    // Notify parent component about root path change
+    if (onRootPathChange) {
+      onRootPathChange();
+    }
+  };
+
+  const navigateToShared = () => {
+    // Navigate to shared with me section
+    setPathHistory(["shared"]);
+    setCurrentPath("shared");
+    setPathNotFound(false);
+    setDriveType("shared");
+    setDriveId("");
+    setItemId("");
+  };
+
+  const navigateToPersonal = () => {
+    // Navigate to personal OneDrive
+    setPathHistory([""]);
+    setCurrentPath("");
+    setPathNotFound(false);
+    setDriveType("personal");
+    setDriveId("");
+    setItemId("");
   };
 
   const formatFileSize = (bytes: number) => {
@@ -127,36 +288,87 @@ export default function FileExplorer({
         </div>
         <Breadcrumbs>
           <BreadcrumbItem>
-            <Button
-              variant="light"
-              size="sm"
-              startContent={<Home className="w-4 h-4" />}
-              onPress={navigateHome}
-            >
-              Home
-            </Button>
-          </BreadcrumbItem>
-          {pathParts.map((part, index) => (
-            <BreadcrumbItem key={`${part}-${index}`}>
-              <Button
-                variant="light"
-                size="sm"
-                onPress={() => {
-                  const newPath = pathParts.slice(0, index + 1).join("/");
-                  setPathHistory([...pathHistory.slice(0, index + 1), newPath]);
-                  setCurrentPath(newPath);
+            <Dropdown>
+              <DropdownTrigger>
+                <Button
+                  variant="light"
+                  size="sm"
+                  startContent={<Home className="w-4 h-4" />}
+                >
+                  Home
+                </Button>
+              </DropdownTrigger>
+              <DropdownMenu
+                aria-label="Home navigation"
+                onAction={(key) => {
+                  if (key === "personal") {
+                    navigateToPersonal();
+                  } else if (key === "shared") {
+                    navigateToShared();
+                  }
                 }}
               >
-                {part}
-              </Button>
-            </BreadcrumbItem>
-          ))}
+                <DropdownItem
+                  key="personal"
+                  startContent={<Home className="w-4 h-4" />}
+                >
+                  Personal OneDrive
+                </DropdownItem>
+                <DropdownItem
+                  key="shared"
+                  startContent={<Folder className="w-4 h-4" />}
+                >
+                  Shared With Me
+                </DropdownItem>
+              </DropdownMenu>
+            </Dropdown>
+          </BreadcrumbItem>
+          {pathParts.map(
+            (part, index) =>
+              part !== "" && (
+                <BreadcrumbItem key={`${part}-${index}`}>
+                  <Button
+                    variant="light"
+                    size="sm"
+                    onPress={() => {
+                      if (pathParts.length > index + 1) {
+                        const newPath: string = pathParts
+                          .slice(0, index + 1)
+                          .join("/");
+                        setPathHistory([
+                          ...pathHistory.slice(0, index + 1),
+                          newPath,
+                        ]);
+                        setCurrentPath(newPath);
+                        setPathNotFound(false);
+
+                        // If navigating back to shared root, clear drive-specific IDs
+                        if (newPath === "shared") {
+                          setDriveId("");
+                          setItemId("");
+                        }
+                      }
+                    }}
+                  >
+                    {part}
+                  </Button>
+                </BreadcrumbItem>
+              )
+          )}
         </Breadcrumbs>
       </>
     );
   };
 
   if (loading) {
+    console.log(
+      "FileExplorer: Rendering loading state, currentPath:",
+      currentPath,
+      "files:",
+      files.length,
+      "folders:",
+      folders.length
+    );
     return (
       <Card className="shadow-lg flex h-full">
         <CardBody className="p-6 overflow-auto h-full items-center justify-center">
@@ -164,6 +376,9 @@ export default function FileExplorer({
             <Spinner size="lg" color="primary" />
             <span className="mt-2 text-gray-600 dark:text-gray-400">
               Loading contents...
+            </span>
+            <span className="mt-1 text-xs text-gray-400">
+              Path: {currentPath || "OneDrive Root"}
             </span>
           </div>
         </CardBody>
@@ -186,14 +401,48 @@ export default function FileExplorer({
     );
   }
 
+  console.log(
+    "FileExplorer: About to render, currentPath:",
+    currentPath,
+    "files:",
+    files.length,
+    "folders:",
+    folders.length,
+    "loading:",
+    loading,
+    "error:",
+    error
+  );
+
   return (
     <Card className="shadow-lg overflow-hidden w-full h-full">
       <CardHeader className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            File Explorer
+            File Explorer {driveType === "shared" && "(Shared)"}
           </h2>
           <div className="flex items-center space-x-2">
+            <RootPathSelector
+              currentPath={rootPath}
+              onPathChange={handleRootPathChange}
+              currentExplorerPath={currentPath}
+            />
+            {rootPath !== "" && (
+              <div>
+                <Button
+                  variant="flat"
+                  size="sm"
+                  onPress={() => {
+                    setCurrentPath(rootPath);
+                    setPathHistory([rootPath]);
+                    setPathNotFound(false);
+                  }}
+                  startContent={<FolderCheck className="w-4 h-4" />}
+                >
+                  Music Root
+                </Button>
+              </div>
+            )}
             {pathHistory.length > 1 && (
               <Button
                 variant="light"
@@ -209,14 +458,18 @@ export default function FileExplorer({
         {renderBreadcrumb()}
       </CardHeader>
 
-      <CardBody className="p-0">
-        <div className="max-h-full overflow-y-auto">
+      <CardBody
+        className={`p-0 inline-block ${
+          pathNotFound ? "flex items-center justify-center" : ""
+        }`}
+      >
+        <div className="h-full max-h-full overflow-y-auto">
           {/* Folders */}
           {folders.map((folder) => (
             <div
               key={folder.id}
               className="px-6 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
-              onClick={() => navigateToFolder(folder.name)}
+              onClick={() => navigateToFolder(folder)}
             >
               <div className="flex items-center space-x-3">
                 <Folder className="h-5 w-5 text-blue-500" />
@@ -225,7 +478,12 @@ export default function FileExplorer({
                     {folder.name}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Folder
+                    {driveType === "shared" ? "Shared Folder" : "Folder"}
+                    {folder.createdBy && (
+                      <span className="ml-2 text-blue-500">
+                        by {folder.createdBy.user.displayName}
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -284,11 +542,41 @@ export default function FileExplorer({
 
           {/* Empty state */}
           {folders.length === 0 && files.length === 0 && (
-            <div className="px-6 py-8 text-center">
+            <div className="h-full flex items-center justify-center flex-col px-6 py-8 text-center">
               <Music className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <p className="text-gray-600 dark:text-gray-400">
-                This folder is empty
+                {pathNotFound
+                  ? "Path not found"
+                  : currentPath === "shared"
+                  ? "No shared folders available"
+                  : currentPath === ""
+                  ? "OneDrive is empty"
+                  : "This folder is empty"}
               </p>
+              {pathNotFound && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                  The path "{currentPath}" could not be found in your OneDrive
+                  <br />
+                  <br />
+                  <b>Please set new Music Root path.</b>
+                </p>
+              )}
+              {pathNotFound && (
+                <Button
+                  onPress={() => {
+                    if (driveType === "shared") {
+                      navigateToPersonal();
+                    } else {
+                      navigateToPersonal();
+                    }
+                  }}
+                  color="primary"
+                  variant="flat"
+                  className="mt-4"
+                >
+                  Go to Personal OneDrive
+                </Button>
+              )}
             </div>
           )}
         </div>

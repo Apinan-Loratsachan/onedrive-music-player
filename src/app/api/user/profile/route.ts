@@ -1,3 +1,4 @@
+import { env } from "next-runtime-env";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -119,7 +120,7 @@ export async function GET(request: NextRequest) {
         }),
         {
           httpOnly: false, // Allow client-side access
-          secure: process.env.NODE_ENV === "production",
+          secure: env("NODE_ENV") === "production",
           sameSite: "lax",
           maxAge: 3600, // 1 hour
         }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getUserSettings, getUserIdFromGraphAPI } from "@/lib/storage";
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,9 +12,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Get user ID from Microsoft Graph API
+    const userId = await getUserIdFromGraphAPI(accessToken);
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User not authenticated" },
+        { status: 401 }
+      );
+    }
+
+    // Get user settings for the root path
+    const userSettings = await getUserSettings(userId);
+    const defaultRootPath = userSettings?.musicRootPath || ""; // Empty string represents OneDrive root
+
     // Get the path parameter from the query string
     const { searchParams } = new URL(request.url);
-    const path = searchParams.get("path") || "Music/Music Library/Main Library";
+    const path = searchParams.get("path") || defaultRootPath;
+    const driveType = searchParams.get("driveType") || "personal"; // "personal" or "shared"
+    const driveId = searchParams.get("driveId") || "";
+    const itemId = searchParams.get("itemId") || "";
 
     // First, try to get data from cache
     try {
@@ -70,6 +88,11 @@ export async function GET(request: NextRequest) {
         });
 
         if (!response.ok) {
+          if (response.status === 404) {
+            // Path not found - return empty results instead of throwing error
+            console.log(`Path not found: ${path}`);
+            return [];
+          }
           const errorText = await response.text();
           console.error("Graph API error response:", errorText);
           throw new Error(
@@ -87,12 +110,40 @@ export async function GET(request: NextRequest) {
       return allItems;
     };
 
+    // Build the correct API URL based on drive type and path
+    let apiUrl: string;
+    if (driveType === "shared") {
+      if (path === "shared") {
+        // For shared drive root, use the sharedWithMe endpoint
+        apiUrl = "https://graph.microsoft.com/v1.0/me/drive/sharedWithMe";
+      } else if (driveId && itemId) {
+        // For shared drive subfolders, use the drive-specific endpoint
+        apiUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/children`;
+      } else {
+        // Fallback to path-based navigation for shared drives
+        const encodedPath = encodeURIComponent(path);
+        apiUrl = `https://graph.microsoft.com/v1.0/me/drive/root:/${encodedPath}:/children`;
+      }
+    } else {
+      // Personal drive logic
+      if (path === "") {
+        // For OneDrive root, use the root children endpoint
+        apiUrl = "https://graph.microsoft.com/v1.0/me/drive/root/children";
+      } else {
+        // For subfolders, use the path-based endpoint
+        const encodedPath = encodeURIComponent(path);
+        apiUrl = `https://graph.microsoft.com/v1.0/me/drive/root:/${encodedPath}:/children`;
+      }
+    }
+
     // Fetch all children from OneDrive using the children endpoint with pagination
-    const allItems = await fetchAllItems(
-      `https://graph.microsoft.com/v1.0/me/drive/root:/${encodedPath}:/children`
-    );
+    const allItems = await fetchAllItems(apiUrl);
 
     console.log(`Fetched ${allItems.length} total items from path: ${path}`);
+
+    // Check if the path was not found (empty result from 404)
+    const pathNotFound =
+      allItems.length === 0 && path !== "" && path !== "shared";
 
     // Separate folders and files
     const folders = allItems.filter((item: any) => item.folder);
@@ -150,6 +201,10 @@ export async function GET(request: NextRequest) {
       files: enhancedFiles,
       folders: folders,
       currentPath: path,
+      pathNotFound: pathNotFound,
+      driveType: driveType,
+      driveId: driveId,
+      itemId: itemId,
     });
   } catch (error) {
     console.error("Error fetching music files:", error);

@@ -1,10 +1,13 @@
 import { PublicClientApplication, Configuration } from "@azure/msal-browser";
+import { env } from "next-runtime-env";
 
 const msalConfig: Configuration = {
   auth: {
-    clientId: process.env.NEXT_PUBLIC_AZURE_CLIENT_ID || "",
-    authority: process.env.NEXT_PUBLIC_AZURE_TENANT_ID
-      ? `https://login.microsoftonline.com/${process.env.NEXT_PUBLIC_AZURE_TENANT_ID}`
+    clientId: env("NEXT_PUBLIC_AZURE_CLIENT_ID") || "",
+    authority: env("NEXT_PUBLIC_AZURE_TENANT_ID")
+      ? `https://login.microsoftonline.com/${env(
+          "NEXT_PUBLIC_AZURE_TENANT_ID"
+        )}`
       : "https://login.microsoftonline.com/common",
     redirectUri: typeof window !== "undefined" ? window.location.origin : "",
   },

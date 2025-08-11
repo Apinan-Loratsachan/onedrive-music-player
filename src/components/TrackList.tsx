@@ -30,12 +30,14 @@ interface TrackListProps {
   onTrackSelect: (track: TrackItem) => void;
   currentTrackId: string | null;
   isPlaying: boolean;
+  onRootPathChange?: () => void;
 }
 
 export default function TrackList({
   onTrackSelect,
   currentTrackId,
   isPlaying,
+  onRootPathChange,
 }: TrackListProps) {
   const [tracks, setTracks] = useState<TrackItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,6 +155,9 @@ export default function TrackList({
   useEffect(() => {
     loadFromCache();
   }, []);
+
+  // Note: onRootPathChange is handled by the parent component
+  // which will trigger a re-render and call loadFromCache when needed
 
   const normalizeText = (text: string): string => {
     return text
@@ -301,8 +306,8 @@ export default function TrackList({
 
   if (tracks.length === 0) {
     return (
-      <Card className="shadow-lg">
-        <CardBody className="p-6">
+      <Card className="shadow-lg h-full">
+        <CardBody className="p-6 h-full items-center justify-center">
           <div className="text-center">
             <Music className="mx-auto h-12 w-12 text-gray-400 mb-4" />
             <p className="text-gray-600 dark:text-gray-400">

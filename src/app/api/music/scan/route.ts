@@ -11,6 +11,8 @@ import {
   releaseScanLock,
   hasScanLock,
   getUserIdFromGraphAPI,
+  getUserSettings,
+  clearScanState,
 } from "@/lib/storage";
 
 interface ScanState {
@@ -137,9 +139,11 @@ export async function POST(request: NextRequest) {
 
 async function startBackgroundScan(accessToken: string, userId: string) {
   try {
-    const mainLibraryPath = "Music/Music Library/Main Library";
+    // Get user settings for the root path
+    const userSettings = await getUserSettings(userId);
+    const mainLibraryPath = userSettings?.musicRootPath || ""; // Empty string represents OneDrive root
 
-    // Prime cache for the main library root itself (files and immediate folders)
+    // Prime cache for the music library root itself (files and immediate folders)
     const mainChildren = await fetchAllItemsWithPagination(
       accessToken,
       mainLibraryPath
@@ -351,9 +355,17 @@ async function fetchAllItemsWithPagination(
   path: string
 ): Promise<any[]> {
   const allItems: any[] = [];
-  let currentUrl = `https://graph.microsoft.com/v1.0/me/drive/root:/${encodeURIComponent(
-    path
-  )}:/children`;
+
+  // Build the correct API URL based on whether we're at root or in a subfolder
+  let currentUrl: string;
+  if (path === "") {
+    // For OneDrive root, use the root children endpoint
+    currentUrl = `https://graph.microsoft.com/v1.0/me/drive/root/children`;
+  } else {
+    // For subfolders, use the path-based endpoint
+    const encodedPath = encodeURIComponent(path);
+    currentUrl = `https://graph.microsoft.com/v1.0/me/drive/root:/${encodedPath}:/children`;
+  }
 
   while (currentUrl) {
     const response = await fetch(currentUrl, {
@@ -454,6 +466,38 @@ export async function GET(request: NextRequest) {
     console.error("Error getting scan data:", error);
     return NextResponse.json(
       { error: "Failed to get scan data" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const accessToken = request.cookies.get("access_token")?.value;
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: "No access token found" },
+        { status: 401 }
+      );
+    }
+
+    // Get user ID from Microsoft Graph API
+    const userId = await getUserIdFromGraphAPI(accessToken);
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User not authenticated" },
+        { status: 401 }
+      );
+    }
+
+    await clearScanState(userId);
+    return NextResponse.json({ message: "Scan state cleared" });
+  } catch (error) {
+    console.error("Error clearing scan state:", error);
+    return NextResponse.json(
+      { error: "Failed to clear scan state" },
       { status: 500 }
     );
   }

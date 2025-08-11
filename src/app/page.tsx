@@ -168,6 +168,13 @@ export default function Home() {
     setIsPlaying(true);
   };
 
+  const handleRootPathChange = () => {
+    // Clear cached tracks when root path changes
+    setCachedTracks([]);
+    setCurrentTrack(null);
+    setIsPlaying(false);
+  };
+
   const handleNext = () => {
     if (!currentTrack || cachedTracks.length === 0) {
       console.log("Next track - no cache available or no current track");
@@ -297,7 +304,7 @@ export default function Home() {
     <div className="w-full min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 left-0 w-full z-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -375,6 +382,7 @@ export default function Home() {
                   onTrackSelect={handleTrackSelect}
                   currentTrackId={currentTrack?.id || null}
                   isPlaying={isPlaying}
+                  onRootPathChange={handleRootPathChange}
                 />
               </div>
             </Tab>
@@ -388,6 +396,7 @@ export default function Home() {
                   onTrackSelect={handleTrackSelect}
                   currentTrackId={currentTrack?.id || null}
                   isPlaying={isPlaying}
+                  onRootPathChange={handleRootPathChange}
                 />
               </div>
             </Tab>

@@ -43,6 +43,11 @@ interface MusicCache {
   };
 }
 
+interface UserSettings {
+  musicRootPath: string;
+  lastUpdated: number;
+}
+
 // Ensure data directory exists
 async function ensureDataDir() {
   try {
@@ -322,6 +327,96 @@ export async function hasScanLock(userId: string): Promise<boolean> {
   }
 }
 
+function getUserSettingsFile(userId: string) {
+  return path.join(getUserCacheDir(userId), "user-settings.json");
+}
+
+export async function getUserSettings(
+  userId: string
+): Promise<UserSettings | null> {
+  try {
+    await ensureUserCacheDir(userId);
+    const settingsFile = getUserSettingsFile(userId);
+
+    try {
+      const data = await fs.readFile(settingsFile, "utf-8");
+      return JSON.parse(data);
+    } catch {
+      // Return default settings if file doesn't exist
+      return {
+        musicRootPath: "", // Empty string represents OneDrive root
+        lastUpdated: Date.now(),
+      };
+    }
+  } catch (error) {
+    console.error("Error getting user settings:", error);
+    return null;
+  }
+}
+
+export async function setUserSettings(
+  userId: string,
+  settings: Partial<UserSettings>
+): Promise<void> {
+  try {
+    await ensureUserCacheDir(userId);
+    const settingsFile = getUserSettingsFile(userId);
+
+    // Get current settings and merge with new ones
+    const currentSettings = (await getUserSettings(userId)) || {
+      musicRootPath: "", // Empty string represents OneDrive root
+      lastUpdated: Date.now(),
+    };
+
+    const updatedSettings = {
+      ...currentSettings,
+      ...settings,
+      lastUpdated: Date.now(),
+    };
+
+    await withFileLock(settingsFile, async () => {
+      await writeJsonAtomic(
+        settingsFile,
+        JSON.stringify(updatedSettings, null, 2)
+      );
+    });
+  } catch (error) {
+    console.error("Error setting user settings:", error);
+    throw error;
+  }
+}
+
+export async function updateUserSettings(
+  userId: string,
+  updates: Partial<UserSettings>
+): Promise<void> {
+  try {
+    await ensureUserCacheDir(userId);
+    const settingsFile = getUserSettingsFile(userId);
+
+    const currentSettings = await getUserSettings(userId);
+    if (!currentSettings) {
+      throw new Error("No existing settings to update");
+    }
+
+    const updatedSettings = {
+      ...currentSettings,
+      ...updates,
+      lastUpdated: Date.now(),
+    };
+
+    await withFileLock(settingsFile, async () => {
+      await writeJsonAtomic(
+        settingsFile,
+        JSON.stringify(updatedSettings, null, 2)
+      );
+    });
+  } catch (error) {
+    console.error("Error updating user settings:", error);
+    throw error;
+  }
+}
+
 // Helper function to get user ID from cookies
 export function getUserIdFromCookies(cookies: any): string | null {
   try {
@@ -360,5 +455,48 @@ export async function getUserIdFromGraphAPI(
   } catch (error) {
     console.error("Error fetching user profile from Graph API:", error);
     return null;
+  }
+}
+
+export async function clearUserCache(userId: string): Promise<void> {
+  try {
+    await ensureUserCacheDir(userId);
+
+    // Clear music cache
+    await withFileLock(getUserMusicCacheFile(userId), async () => {
+      await writeJsonAtomic(getUserMusicCacheFile(userId), "{}");
+    });
+
+    // Clear scan state
+    await withFileLock(getUserScanStateFile(userId), async () => {
+      await writeJsonAtomic(getUserScanStateFile(userId), "{}");
+    });
+
+    // Clear scan lock
+    try {
+      await fs.unlink(getUserScanLockFile(userId));
+    } catch {
+      // Lock file might not exist, ignore error
+    }
+  } catch (error) {
+    console.error("Error clearing user cache:", error);
+  }
+}
+
+export async function clearScanState(userId: string): Promise<void> {
+  try {
+    await ensureUserCacheDir(userId);
+    await withFileLock(getUserScanStateFile(userId), async () => {
+      await writeJsonAtomic(getUserScanStateFile(userId), "{}");
+    });
+
+    // Also clear scan lock
+    try {
+      await fs.unlink(getUserScanLockFile(userId));
+    } catch {
+      // Lock file might not exist, ignore error
+    }
+  } catch (error) {
+    console.error("Error clearing scan state:", error);
   }
 }

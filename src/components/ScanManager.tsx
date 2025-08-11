@@ -37,6 +37,24 @@ export default function ScanManager() {
   const [isStarting, setIsStarting] = useState(false);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
+  // Function to reset scan state (can be called externally)
+  const resetScanState = () => {
+    setScanState(null);
+    setIsStarting(false);
+    setLastChecked(null);
+  };
+
+  // Expose reset function to parent components
+  useEffect(() => {
+    // @ts-ignore - Exposing function to parent
+    window.resetScanManager = resetScanState;
+
+    return () => {
+      // @ts-ignore - Cleanup
+      delete window.resetScanManager;
+    };
+  }, []);
+
   // Derived flags for UI decisions
   const hasPartialProgress = !!(
     scanState &&
@@ -211,8 +229,11 @@ export default function ScanManager() {
         <CardBody className="px-6 py-4">
           <div className="text-center">
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              No scan has been started yet. Start a scan to cache your music
-              library for faster access.
+              No scan has been started yet.{" "}
+              <b>
+                Please set your music root path in the settings before start a
+                scan.
+              </b>
             </p>
             <Button
               color="primary"
