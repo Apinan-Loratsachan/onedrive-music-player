@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { LogOut, Music, User } from "lucide-react";
+import { useMsal } from "@azure/msal-react";
 import StickyPlayer from "@/components/StickyPlayer";
 import FileExplorer from "@/components/FileExplorer";
 import ScanManager from "@/components/ScanManager";
@@ -27,6 +28,7 @@ interface UserProfile {
 }
 
 export default function Home() {
+  const { instance } = useMsal();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<MusicFile | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -64,6 +66,11 @@ export default function Home() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
+    // Clear MSAL accounts when component mounts to ensure fresh state
+    if (instance) {
+      instance.clearCache();
+    }
+
     checkAuthStatus();
 
     // Listen for page visibility changes (when user returns from OAuth)
@@ -82,7 +89,7 @@ export default function Home() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(intervalId);
     };
-  }, []);
+  }, [instance]);
 
   const checkAuthStatus = async () => {
     try {
@@ -206,18 +213,69 @@ export default function Home() {
     }
   };
 
-  const handleLogout = () => {
-    // Clear cookies by setting them to expire
-    document.cookie =
-      "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie =
-      "refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie =
-      "user_profile=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    setIsAuthenticated(false);
-    setCurrentTrack(null);
-    setIsPlaying(false);
-    setUserProfile(null);
+  const handleLogout = async () => {
+    try {
+      // Get the current account for logout
+      const currentAccount = instance.getActiveAccount();
+
+      if (currentAccount) {
+        // Call logout API to clear server-side cookies
+        try {
+          await fetch("/api/auth/logout", { method: "POST" });
+        } catch (apiError) {
+          console.error("API logout error:", apiError);
+        }
+
+        // Clear MSAL cache and accounts
+        instance.clearCache();
+
+        // Use MSAL logout with redirect and force account selection
+        const logoutRequest = {
+          account: currentAccount,
+          postLogoutRedirectUri: window.location.origin,
+          // Force account selection on next login
+          authority: `https://login.microsoftonline.com/${
+            process.env.NEXT_PUBLIC_AZURE_TENANT_ID || "consumers"
+          }`,
+        };
+        instance.logoutRedirect(logoutRequest);
+      } else {
+        // Fallback: clear cookies and state if no MSAL account
+        await fetch("/api/auth/logout", { method: "POST" });
+        // Clear MSAL cache
+        instance.clearCache();
+        document.cookie =
+          "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie =
+          "refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie =
+          "user_profile=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        setIsAuthenticated(false);
+        setCurrentTrack(null);
+        setIsPlaying(false);
+        setUserProfile(null);
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Fallback logout
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
+        // Clear MSAL cache
+        instance.clearCache();
+      } catch (apiError) {
+        console.error("API logout error:", apiError);
+      }
+      document.cookie =
+        "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      document.cookie =
+        "refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      document.cookie =
+        "user_profile=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      setIsAuthenticated(false);
+      setCurrentTrack(null);
+      setIsPlaying(false);
+      setUserProfile(null);
+    }
   };
 
   if (loading) {

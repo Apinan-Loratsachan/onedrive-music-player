@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Noto_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import HeroUIProvider from "@/providers/heroui";
+import MsalProviderWrapper from "@/providers/msal";
 
 const notoSansThai = Noto_Sans_Thai({
   variable: "--font-noto-sans-thai",
@@ -34,7 +35,9 @@ export default function RootLayout({
         />
       </head>
       <body className={`${notoSansThai.variable} antialiased`}>
-        <HeroUIProvider>{children}</HeroUIProvider>
+        <HeroUIProvider>
+          <MsalProviderWrapper>{children}</MsalProviderWrapper>
+        </HeroUIProvider>
       </body>
     </html>
   );

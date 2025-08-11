@@ -10,7 +10,9 @@ export default function Login() {
   const handleLogin = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/auth/login");
+
+      // Add a parameter to force account selection
+      const response = await fetch("/api/auth/login?prompt=select_account");
 
       if (!response.ok) {
         throw new Error("Failed to get login URL");

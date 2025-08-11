@@ -6,9 +6,11 @@ const msalConfig = {
   auth: {
     clientId: env("NEXT_PUBLIC_AZURE_CLIENT_ID") || "",
     clientSecret: env("AZURE_CLIENT_SECRET") || "",
-    authority: `https://login.microsoftonline.com/${
-      env("AZURE_TENANT_ID") || "common"
-    }`,
+    authority: env("NEXT_PUBLIC_AZURE_TENANT_ID")
+      ? `https://login.microsoftonline.com/${env(
+          "NEXT_PUBLIC_AZURE_TENANT_ID"
+        )}`
+      : "https://login.microsoftonline.com/common",
   },
 };
 
