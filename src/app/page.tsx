@@ -19,12 +19,20 @@ interface MusicFile {
   lastModified?: string;
 }
 
+interface UserProfile {
+  displayName: string;
+  email: string;
+  id: string;
+  photoUrl: string | null;
+}
+
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<MusicFile | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
   const [cachedTracks, setCachedTracks] = useState<MusicFile[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [shuffleEnabled, setShuffleEnabled] = useState<boolean>(() => {
     try {
       if (typeof window === "undefined") return false;
@@ -81,13 +89,37 @@ export default function Home() {
       const response = await fetch("/api/music");
       if (response.ok) {
         setIsAuthenticated(true);
+        // Fetch user profile when authenticated
+        fetchUserProfile();
       } else {
         setIsAuthenticated(false);
+        setUserProfile(null);
       }
     } catch (error) {
       setIsAuthenticated(false);
+      setUserProfile(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await fetch("/api/user/profile");
+      if (response.ok) {
+        const profile = await response.json();
+        setUserProfile(profile);
+      } else {
+        console.error(
+          "Failed to fetch user profile:",
+          response.status,
+          response.statusText
+        );
+        // Don't set userProfile to null here, keep the existing state if any
+      }
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      // Don't set userProfile to null here, keep the existing state if any
     }
   };
 
@@ -180,9 +212,12 @@ export default function Home() {
       "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     document.cookie =
       "refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    document.cookie =
+      "user_profile=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     setIsAuthenticated(false);
     setCurrentTrack(null);
     setIsPlaying(false);
+    setUserProfile(null);
   };
 
   if (loading) {
@@ -216,10 +251,38 @@ export default function Home() {
             </div>
 
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
-                <User className="w-4 h-4" />
-                <span>Connected to OneDrive</span>
-              </div>
+              {userProfile ? (
+                <div className="flex items-center space-x-3">
+                  {/* User Photo */}
+                  {userProfile.photoUrl ? (
+                    <img
+                      src={userProfile.photoUrl}
+                      alt="Profile"
+                      className="w-8 h-8 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
+                      <User className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                    </div>
+                  )}
+
+                  {/* User Info */}
+                  <div className="flex flex-col items-start">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                      {userProfile.displayName || "User"}
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {userProfile.email}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                  <User className="w-4 h-4" />
+                  <span>Connected to OneDrive</span>
+                </div>
+              )}
+
               <Button
                 onPress={handleLogout}
                 variant="light"

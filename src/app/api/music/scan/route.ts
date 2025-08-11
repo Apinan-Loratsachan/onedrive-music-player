@@ -10,6 +10,7 @@ import {
   acquireScanLock,
   releaseScanLock,
   hasScanLock,
+  getUserIdFromGraphAPI,
 } from "@/lib/storage";
 
 interface ScanState {
@@ -41,6 +42,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get user ID from Microsoft Graph API
+    const userId = await getUserIdFromGraphAPI(accessToken);
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User not authenticated" },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const {
       startBackground = false,
@@ -54,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     if (startBackground) {
       // If a scan is already running, don't start a new one
-      const existing = await getScanState();
+      const existing = await getScanState(userId);
       if (existing?.isScanning) {
         return NextResponse.json({
           message: "Scan already in progress",
@@ -64,7 +75,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Prevent multiple concurrent starts (process-level lock)
-      if (await hasScanLock()) {
+      if (await hasScanLock(userId)) {
         return NextResponse.json({
           message: "Scan lock present; another scan is starting/running",
           status: "locked",
@@ -83,10 +94,10 @@ export async function POST(request: NextRequest) {
       ) {
         existing.isScanning = true;
         existing.lastUpdate = Date.now();
-        await setScanState(existing);
-        if (await acquireScanLock()) {
-          scanTopLevelFolders(accessToken, existing).finally(() =>
-            releaseScanLock()
+        await setScanState(userId, existing);
+        if (await acquireScanLock(userId)) {
+          scanTopLevelFolders(accessToken, userId, existing).finally(() =>
+            releaseScanLock(userId)
           );
         }
         return NextResponse.json({
@@ -97,8 +108,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Otherwise, start fresh
-      if (await acquireScanLock()) {
-        startBackgroundScan(accessToken).finally(() => releaseScanLock());
+      if (await acquireScanLock(userId)) {
+        startBackgroundScan(accessToken, userId).finally(() =>
+          releaseScanLock(userId)
+        );
       }
       return NextResponse.json({
         message: "Background scan started",
@@ -108,7 +121,7 @@ export async function POST(request: NextRequest) {
 
     if (resumeScan) {
       // Resume interrupted scan
-      const result = await resumeBackgroundScan(accessToken);
+      const result = await resumeBackgroundScan(accessToken, userId);
       return NextResponse.json(result);
     }
 
@@ -122,7 +135,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function startBackgroundScan(accessToken: string) {
+async function startBackgroundScan(accessToken: string, userId: string) {
   try {
     const mainLibraryPath = "Music/Music Library/Main Library";
 
@@ -149,7 +162,7 @@ async function startBackgroundScan(accessToken: string) {
       extension: file.name.split(".").pop()?.toUpperCase() || "",
       lastModified: file.lastModifiedDateTime || new Date().toISOString(),
     }));
-    await storeMusicData(mainLibraryPath, {
+    await storeMusicData(userId, mainLibraryPath, {
       files: processedRootFiles,
       folders: mainFolders.map((folder: any) => ({
         id: folder.id,
@@ -180,22 +193,26 @@ async function startBackgroundScan(accessToken: string) {
       scanedFolder: 0,
     };
 
-    await setScanState(scanState);
+    await setScanState(userId, scanState);
 
     // Start scanning each top-level folder fully (including its subfolders)
-    await scanTopLevelFolders(accessToken, scanState);
+    await scanTopLevelFolders(accessToken, userId, scanState);
   } catch (error) {
     console.error("Error starting background scan:", error);
-    await updateScanState({
+    await updateScanState(userId, {
       error: error instanceof Error ? error.message : String(error),
     });
   }
 }
 
-async function scanTopLevelFolders(accessToken: string, scanState: ScanState) {
+async function scanTopLevelFolders(
+  accessToken: string,
+  userId: string,
+  scanState: ScanState
+) {
   try {
     // Always load the latest persisted state to avoid clobbering progress
-    let freshState = (await getScanState()) || scanState;
+    let freshState = (await getScanState(userId)) || scanState;
     const { topLevelFoldersPaths, scannedTopLevelFolders } = freshState;
     for (
       let index = scannedTopLevelFolders;
@@ -204,29 +221,33 @@ async function scanTopLevelFolders(accessToken: string, scanState: ScanState) {
     ) {
       const topLevelPath = topLevelFoldersPaths[index];
       // Reload latest state to avoid overwriting cumulative counters
-      const preState = (await getScanState()) || freshState;
+      const preState = (await getScanState(userId)) || freshState;
       // Update fields prior to scanning the folder
       preState.currentTopLevelFolder = topLevelPath;
       preState.currentPath = topLevelPath; // reflect the exact folder being scanned
       preState.lastUpdate = Date.now();
-      await setScanState(preState);
-
-      console.log(`Scanning top-level folder: ${topLevelPath}`);
+      console.log(`[SCAN] ${userId} | ${topLevelPath}`);
+      await setScanState(userId, preState);
 
       try {
-        await scanFolderRecursive(accessToken, topLevelPath, freshState);
+        await scanFolderRecursive(
+          accessToken,
+          userId,
+          topLevelPath,
+          freshState
+        );
       } catch (err) {
         console.error(`Error scanning top-level folder ${topLevelPath}:`, err);
         // continue to next folder
       }
 
       // After completing an entire top-level folder
-      const postState = (await getScanState()) || preState;
+      const postState = (await getScanState(userId)) || preState;
       postState.scannedTopLevelFolders = index + 1;
       // mirror to requested key
       postState.scaned = postState.scannedTopLevelFolders;
       postState.lastUpdate = Date.now();
-      await setScanState(postState);
+      await setScanState(userId, postState);
       // keep latest reference for next loop
       freshState = postState;
 
@@ -235,15 +256,13 @@ async function scanTopLevelFolders(accessToken: string, scanState: ScanState) {
     }
 
     // Mark scan as complete (preserve cumulative counters)
-    const doneState = (await getScanState()) || freshState;
+    const doneState = (await getScanState(userId)) || freshState;
     doneState.isScanning = false;
     doneState.lastUpdate = Date.now();
-    await setScanState(doneState);
-
-    console.log("Background scan completed");
+    await setScanState(userId, doneState);
   } catch (error) {
     console.error("Error in scanAllFolders:", error);
-    await updateScanState({
+    await updateScanState(userId, {
       error: error instanceof Error ? error.message : String(error),
       isScanning: false,
     });
@@ -252,6 +271,7 @@ async function scanTopLevelFolders(accessToken: string, scanState: ScanState) {
 
 async function scanFolderRecursive(
   accessToken: string,
+  userId: string,
   folderPath: string,
   scanState: ScanState
 ) {
@@ -265,7 +285,7 @@ async function scanFolderRecursive(
 
     // Update currentPath to the folder we are about to process
     try {
-      await updateScanState({ currentPath });
+      await updateScanState(userId, { currentPath });
     } catch {}
 
     const allItems = await fetchAllItemsWithPagination(
@@ -291,7 +311,7 @@ async function scanFolderRecursive(
       lastModified: file.lastModifiedDateTime || new Date().toISOString(),
     }));
 
-    await storeMusicData(currentPath, {
+    await storeMusicData(userId, currentPath, {
       files: processedFiles,
       folders: folders.map((folder: any) => ({
         id: folder.id,
@@ -310,7 +330,7 @@ async function scanFolderRecursive(
     });
 
     // Update incidental scan stats/info, re-read persisted state to avoid loss
-    const latest = (await getScanState()) || scanState;
+    const latest = (await getScanState(userId)) || scanState;
     latest.scannedPaths = Array.from(
       new Set([...latest.scannedPaths, currentPath])
     );
@@ -319,7 +339,7 @@ async function scanFolderRecursive(
     latest.scanedFolder = (latest.scanedFolder || 0) + 1;
     latest.currentPath = currentPath;
     latest.lastUpdate = Date.now();
-    await setScanState(latest);
+    await setScanState(userId, latest);
 
     // Throttle a bit inside recursion
     await new Promise((resolve) => setTimeout(resolve, 75));
@@ -359,17 +379,17 @@ async function fetchAllItemsWithPagination(
   return allItems;
 }
 
-async function resumeBackgroundScan(accessToken: string) {
-  const scanState = await getScanState();
+async function resumeBackgroundScan(accessToken: string, userId: string) {
+  const scanState = await getScanState(userId);
 
   if (!scanState || !scanState.isScanning) {
     return { message: "No active scan to resume" };
   }
 
   // Resume from where we left off
-  if (await acquireScanLock()) {
-    scanTopLevelFolders(accessToken, scanState).finally(() =>
-      releaseScanLock()
+  if (await acquireScanLock(userId)) {
+    scanTopLevelFolders(accessToken, userId, scanState).finally(() =>
+      releaseScanLock(userId)
     );
   }
 
@@ -383,30 +403,49 @@ async function resumeBackgroundScan(accessToken: string) {
 // Add cache stats endpoint
 export async function GET(request: NextRequest) {
   try {
+    const accessToken = request.cookies.get("access_token")?.value;
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: "No access token found" },
+        { status: 401 }
+      );
+    }
+
+    // Get user ID from Microsoft Graph API
+    const userId = await getUserIdFromGraphAPI(accessToken);
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User not authenticated" },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const path = searchParams.get("path");
     const stats = searchParams.get("stats");
 
     if (stats === "true") {
       // Return cache statistics
-      const cacheStats = await getCacheStats();
+      const cacheStats = await getCacheStats(userId);
       return NextResponse.json(cacheStats);
     }
 
     if (path) {
       // Check if specific path is cached
-      const cachedData = await getCachedData(path);
+      const cachedData = await getCachedData(userId, path);
       if (cachedData) {
         return NextResponse.json({
           cached: true,
           data: cachedData,
-          lastUpdated: await getLastUpdated(path),
+          lastUpdated: await getLastUpdated(userId, path),
         });
       }
     }
 
     // Return scan status
-    const scanState = await getScanState();
+    const scanState = await getScanState(userId);
     return NextResponse.json({
       cached: false,
       scanState,

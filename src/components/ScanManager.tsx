@@ -71,25 +71,61 @@ export default function ScanManager() {
     // Initial fetch in case SSE is delayed
     checkScanStatus();
 
-    const eventSource = new EventSource("/api/music/scan/stream");
-    eventSource.onmessage = (e) => {
+    // Get userId using access token from Microsoft API
+    const getUserId = async () => {
       try {
-        const payload = JSON.parse(e.data);
-        if (payload?.scanState) {
-          setScanState(payload.scanState);
-          setLastChecked(new Date());
+        const response = await fetch("/api/user/profile");
+        if (response.ok) {
+          const userProfile = await response.json();
+          return userProfile.id;
         }
-      } catch {}
-    };
-    eventSource.onerror = () => {
-      // Fallback to periodic polling if SSE fails
-      checkScanStatus();
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+      }
+      return null;
     };
 
+    // Use async function to get userId and set up SSE
+    const setupSSE = async () => {
+      const userId = await getUserId();
+      if (!userId) {
+        console.warn("No user ID found, falling back to polling");
+        return;
+      }
+
+      const eventSource = new EventSource(
+        `/api/music/scan/stream?userId=${encodeURIComponent(userId)}`
+      );
+      eventSource.onmessage = (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload?.scanState) {
+            setScanState(payload.scanState);
+            setLastChecked(new Date());
+          }
+        } catch {}
+      };
+      eventSource.onerror = () => {
+        // Fallback to periodic polling if SSE fails
+        checkScanStatus();
+      };
+
+      return eventSource;
+    };
+
+    let eventSource: EventSource | null = null;
+    setupSSE().then((es) => {
+      if (es) {
+        eventSource = es;
+      }
+    });
+
     return () => {
-      try {
-        eventSource.close();
-      } catch {}
+      if (eventSource) {
+        try {
+          eventSource.close();
+        } catch {}
+      }
     };
   }, []);
 

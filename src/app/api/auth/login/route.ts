@@ -18,8 +18,7 @@ export async function GET(request: NextRequest) {
   try {
     const authUrl = await msalClient.getAuthCodeUrl({
       scopes: ["Files.Read", "User.Read"],
-      redirectUri:
-        env("AZURE_REDIRECT_URI") || "http://localhost:3000/api/auth/callback",
+      redirectUri: `${request.nextUrl.origin}/api/auth/callback`,
       responseMode: "query",
     });
 

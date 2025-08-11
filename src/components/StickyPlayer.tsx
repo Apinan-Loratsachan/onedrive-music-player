@@ -78,6 +78,81 @@ export default function StickyPlayer({
     }
   }, [currentTrack]);
 
+  // Set up media session for system media controls
+  useEffect(() => {
+    if ("mediaSession" in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title || currentTrack.name,
+        artist: currentTrack.artist || "Unknown Artist",
+        album: currentTrack.folder || "Unknown Album",
+      });
+
+      navigator.mediaSession.setActionHandler("play", () => {
+        if (audioRef.current) {
+          audioRef.current.play();
+          setIsPlaying(true);
+          onPlayPauseChange(true);
+        }
+      });
+
+      navigator.mediaSession.setActionHandler("pause", () => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+          onPlayPauseChange(false);
+        }
+      });
+
+      navigator.mediaSession.setActionHandler("previoustrack", () => {
+        if (hasPrevious) {
+          onPrevious();
+        }
+      });
+
+      navigator.mediaSession.setActionHandler("nexttrack", () => {
+        if (hasNext || shuffleEnabled || repeatMode !== 0) {
+          onNext();
+        }
+      });
+
+      navigator.mediaSession.setActionHandler("seekbackward", () => {
+        if (audioRef.current) {
+          audioRef.current.currentTime = Math.max(
+            0,
+            audioRef.current.currentTime - 10
+          );
+        }
+      });
+
+      navigator.mediaSession.setActionHandler("seekforward", () => {
+        if (audioRef.current) {
+          audioRef.current.currentTime = Math.min(
+            audioRef.current.duration,
+            audioRef.current.currentTime + 10
+          );
+        }
+      });
+
+      navigator.mediaSession.setActionHandler("stop", () => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          setIsPlaying(false);
+          onPlayPauseChange(false);
+        }
+      });
+    }
+  }, [
+    currentTrack,
+    hasNext,
+    hasPrevious,
+    shuffleEnabled,
+    repeatMode,
+    onPlayPauseChange,
+    onNext,
+    onPrevious,
+  ]);
+
   // Sync internal isPlaying state with external prop and control audio
   useEffect(() => {
     if (audioRef.current && currentTrack) {
@@ -88,9 +163,17 @@ export default function StickyPlayer({
           onPlayPauseChange(false);
         });
         setIsPlaying(true);
+        // Update media session playback state
+        if ("mediaSession" in navigator) {
+          navigator.mediaSession.playbackState = "playing";
+        }
       } else {
         audioRef.current.pause();
         setIsPlaying(false);
+        // Update media session playback state
+        if ("mediaSession" in navigator) {
+          navigator.mediaSession.playbackState = "paused";
+        }
       }
     }
   }, [externalIsPlaying, currentTrack, onPlayPauseChange]);
@@ -102,6 +185,14 @@ export default function StickyPlayer({
     const updateTime = () => {
       if (!isSeeking) {
         setCurrentTime(audio.currentTime);
+        // Update media session position state
+        if ("mediaSession" in navigator) {
+          navigator.mediaSession.setPositionState({
+            duration: audio.duration || 0,
+            position: audio.currentTime,
+            playbackRate: audio.playbackRate,
+          });
+        }
       }
     };
     const updateDuration = () => setDuration(audio.duration);

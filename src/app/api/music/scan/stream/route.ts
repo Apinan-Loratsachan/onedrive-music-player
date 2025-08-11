@@ -7,7 +7,14 @@ function toSSE(data: any): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get("userId");
+
+  if (!userId) {
+    return new Response("Missing userId parameter", { status: 400 });
+  }
+
   let lastVersion = 0;
   const encoder = new TextEncoder();
   let pollInterval: NodeJS.Timeout | null = null;
@@ -37,13 +44,18 @@ export async function GET(_request: NextRequest) {
       const send = async () => {
         if (isClosed) return;
         try {
-          const scanState = await getScanState();
+          const scanState = await getScanState(userId);
+
           const version = scanState?.lastUpdate ?? 0;
           if (version && version !== lastVersion) {
             lastVersion = version;
             safeEnqueue(toSSE({ scanState }));
           }
-        } catch {
+        } catch (error) {
+          console.error(
+            `[SSE] User ${userId}: Error reading scan state:`,
+            error
+          );
           // emit error info for debugging, but guard enqueue
           safeEnqueue(toSSE({ error: "failed_to_read_scan_state" }));
         }

@@ -31,8 +31,7 @@ export async function GET(request: NextRequest) {
     const tokenResponse = await msalClient.acquireTokenByCode({
       code,
       scopes: ["Files.Read", "User.Read"],
-      redirectUri:
-        env("AZURE_REDIRECT_URI") || "http://localhost:3000/api/auth/callback",
+      redirectUri: `${request.nextUrl.origin}/api/auth/callback`,
     });
 
     if (tokenResponse) {

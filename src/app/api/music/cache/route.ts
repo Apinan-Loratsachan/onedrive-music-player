@@ -1,15 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAllCachedPaths, getCachedData } from "@/lib/storage";
+import {
+  getAllCachedPaths,
+  getCachedData,
+  getUserIdFromGraphAPI,
+} from "@/lib/storage";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const paths = await getAllCachedPaths();
+    const accessToken = request.cookies.get("access_token")?.value;
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: "No access token found" },
+        { status: 401 }
+      );
+    }
+
+    // Get user ID from Microsoft Graph API
+    const userId = await getUserIdFromGraphAPI(accessToken);
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User not authenticated" },
+        { status: 401 }
+      );
+    }
+
+    const paths = await getAllCachedPaths(userId);
     const idToTrack = new Map<string, any>();
 
     for (const p of paths) {
-      const data = await getCachedData(p);
+      const data = await getCachedData(userId, p);
       const files = Array.isArray(data?.files) ? data.files : [];
       for (const file of files) {
         if (file && typeof file.id === "string") {

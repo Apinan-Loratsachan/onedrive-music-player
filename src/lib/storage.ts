@@ -2,9 +2,19 @@ import { promises as fs } from "fs";
 import path from "path";
 
 const DATA_DIR = path.join(process.cwd(), ".cache");
-const SCAN_STATE_FILE = path.join(DATA_DIR, "scan-state.json");
-const MUSIC_CACHE_FILE = path.join(DATA_DIR, "music-cache.json");
-const SCAN_LOCK_FILE = path.join(DATA_DIR, "scan.lock");
+
+// User-specific cache directory structure
+function getUserCacheDir(userId: string) {
+  return path.join(DATA_DIR, "users", userId);
+}
+
+function getUserScanStateFile(userId: string) {
+  return path.join(getUserCacheDir(userId), "scan-state.json");
+}
+
+function getUserMusicCacheFile(userId: string) {
+  return path.join(getUserCacheDir(userId), "music-cache.json");
+}
 
 interface ScanState {
   isScanning: boolean;
@@ -39,6 +49,18 @@ async function ensureDataDir() {
     await fs.access(DATA_DIR);
   } catch {
     await fs.mkdir(DATA_DIR, { recursive: true });
+  }
+}
+
+// Ensure user cache directory exists
+async function ensureUserCacheDir(userId: string) {
+  try {
+    await ensureDataDir();
+    const userDir = getUserCacheDir(userId);
+    await fs.access(userDir);
+  } catch {
+    const userDir = getUserCacheDir(userId);
+    await fs.mkdir(userDir, { recursive: true });
   }
 }
 
@@ -113,31 +135,40 @@ async function writeJsonAtomic(filePath: string, jsonString: string) {
 }
 
 // Scan State Management
-export async function setScanState(state: ScanState): Promise<void> {
-  await withFileLock(SCAN_STATE_FILE, async () => {
-    await writeJsonAtomic(SCAN_STATE_FILE, JSON.stringify(state, null, 2));
+export async function setScanState(
+  userId: string,
+  state: ScanState
+): Promise<void> {
+  await ensureUserCacheDir(userId);
+  const filePath = getUserScanStateFile(userId);
+  await withFileLock(filePath, async () => {
+    await writeJsonAtomic(filePath, JSON.stringify(state, null, 2));
   });
 }
 
-export async function getScanState(): Promise<ScanState | null> {
+export async function getScanState(userId: string): Promise<ScanState | null> {
   try {
-    await ensureDataDir();
-    const data = await fs.readFile(SCAN_STATE_FILE, "utf-8");
-    return JSON.parse(data);
-  } catch {
+    await ensureUserCacheDir(userId);
+    const filePath = getUserScanStateFile(userId);
+    const data = await fs.readFile(filePath, "utf-8");
+    const result = JSON.parse(data);
+    return result;
+  } catch (error) {
     return null;
   }
 }
 
 export async function updateScanState(
+  userId: string,
   updates: Partial<ScanState>
 ): Promise<void> {
-  await withFileLock(SCAN_STATE_FILE, async () => {
-    const currentState = await getScanState();
+  await ensureUserCacheDir(userId);
+  await withFileLock(getUserScanStateFile(userId), async () => {
+    const currentState = await getScanState(userId);
     if (currentState) {
       const updatedState = { ...currentState, ...updates } as ScanState;
       await writeJsonAtomic(
-        SCAN_STATE_FILE,
+        getUserScanStateFile(userId),
         JSON.stringify(updatedState, null, 2)
       );
     }
@@ -145,26 +176,39 @@ export async function updateScanState(
 }
 
 // Music Cache Management
-export async function storeMusicData(path: string, data: any): Promise<void> {
-  await withFileLock(MUSIC_CACHE_FILE, async () => {
-    await ensureDataDir();
+export async function storeMusicData(
+  userId: string,
+  path: string,
+  data: any
+): Promise<void> {
+  await ensureUserCacheDir(userId);
+  await withFileLock(getUserMusicCacheFile(userId), async () => {
     let cache: MusicCache = {};
     try {
-      const existingData = await fs.readFile(MUSIC_CACHE_FILE, "utf-8");
+      const existingData = await fs.readFile(
+        getUserMusicCacheFile(userId),
+        "utf-8"
+      );
       cache = JSON.parse(existingData);
     } catch {
       // File doesn't exist or is invalid, start fresh
       cache = {} as MusicCache;
     }
     cache[path] = data;
-    await writeJsonAtomic(MUSIC_CACHE_FILE, JSON.stringify(cache, null, 2));
+    await writeJsonAtomic(
+      getUserMusicCacheFile(userId),
+      JSON.stringify(cache, null, 2)
+    );
   });
 }
 
-export async function getCachedData(path: string): Promise<any | null> {
+export async function getCachedData(
+  userId: string,
+  path: string
+): Promise<any | null> {
   try {
-    await ensureDataDir();
-    const data = await fs.readFile(MUSIC_CACHE_FILE, "utf-8");
+    await ensureUserCacheDir(userId);
+    const data = await fs.readFile(getUserMusicCacheFile(userId), "utf-8");
     const cache: MusicCache = JSON.parse(data);
     return cache[path] || null;
   } catch {
@@ -172,15 +216,18 @@ export async function getCachedData(path: string): Promise<any | null> {
   }
 }
 
-export async function getLastUpdated(path: string): Promise<number | null> {
-  const data = await getCachedData(path);
+export async function getLastUpdated(
+  userId: string,
+  path: string
+): Promise<number | null> {
+  const data = await getCachedData(userId, path);
   return data?.lastUpdated || null;
 }
 
-export async function getAllCachedPaths(): Promise<string[]> {
+export async function getAllCachedPaths(userId: string): Promise<string[]> {
   try {
-    await ensureDataDir();
-    const data = await fs.readFile(MUSIC_CACHE_FILE, "utf-8");
+    await ensureUserCacheDir(userId);
+    const data = await fs.readFile(getUserMusicCacheFile(userId), "utf-8");
     const cache: MusicCache = JSON.parse(data);
     return Object.keys(cache);
   } catch {
@@ -188,26 +235,26 @@ export async function getAllCachedPaths(): Promise<string[]> {
   }
 }
 
-export async function clearCache(): Promise<void> {
+export async function clearCache(userId: string): Promise<void> {
   try {
-    await ensureDataDir();
-    await withFileLock(MUSIC_CACHE_FILE, async () => {
-      await writeJsonAtomic(MUSIC_CACHE_FILE, "{}");
+    await ensureUserCacheDir(userId);
+    await withFileLock(getUserMusicCacheFile(userId), async () => {
+      await writeJsonAtomic(getUserMusicCacheFile(userId), "{}");
     });
   } catch (error) {
     console.error("Error clearing cache:", error);
   }
 }
 
-export async function getCacheStats(): Promise<{
+export async function getCacheStats(userId: string): Promise<{
   totalPaths: number;
   totalFiles: number;
   totalFolders: number;
   lastUpdated: number | null;
 }> {
   try {
-    await ensureDataDir();
-    const data = await fs.readFile(MUSIC_CACHE_FILE, "utf-8");
+    await ensureUserCacheDir(userId);
+    const data = await fs.readFile(getUserMusicCacheFile(userId), "utf-8");
     const cache: MusicCache = JSON.parse(data);
 
     const paths = Object.keys(cache);
@@ -240,13 +287,17 @@ export async function getCacheStats(): Promise<{
   }
 }
 
-// Cross-request scan lock using a lock file (best-effort, process-wide)
-export async function acquireScanLock(): Promise<boolean> {
-  await ensureDataDir();
+// User-specific scan lock using lock files (best-effort, process-wide)
+function getUserScanLockFile(userId: string) {
+  return path.join(getUserCacheDir(userId), "scan.lock");
+}
+
+export async function acquireScanLock(userId: string): Promise<boolean> {
+  await ensureUserCacheDir(userId);
   try {
     // Create exclusively; fails if exists
     await fs.writeFile(
-      SCAN_LOCK_FILE,
+      getUserScanLockFile(userId),
       JSON.stringify({ pid: process.pid, ts: Date.now() })
     );
     // Attempt exclusive by using link semantics: if another process overwrote, it's still one file; best-effort
@@ -256,17 +307,58 @@ export async function acquireScanLock(): Promise<boolean> {
   }
 }
 
-export async function releaseScanLock(): Promise<void> {
+export async function releaseScanLock(userId: string): Promise<void> {
   try {
-    await fs.unlink(SCAN_LOCK_FILE);
+    await fs.unlink(getUserScanLockFile(userId));
   } catch {}
 }
 
-export async function hasScanLock(): Promise<boolean> {
+export async function hasScanLock(userId: string): Promise<boolean> {
   try {
-    await fs.access(SCAN_LOCK_FILE);
+    await fs.access(getUserScanLockFile(userId));
     return true;
   } catch {
     return false;
+  }
+}
+
+// Helper function to get user ID from cookies
+export function getUserIdFromCookies(cookies: any): string | null {
+  try {
+    const userProfileCookie = cookies.get("user_profile");
+    if (userProfileCookie) {
+      const userProfile = JSON.parse(userProfileCookie.value);
+      return userProfile.id || null;
+    }
+  } catch (error) {
+    console.error("Error parsing user profile cookie:", error);
+  }
+  return null;
+}
+
+// Helper function to get user ID from Microsoft Graph API
+export async function getUserIdFromGraphAPI(
+  accessToken: string
+): Promise<string | null> {
+  try {
+    const response = await fetch("https://graph.microsoft.com/v1.0/me", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (response.ok) {
+      const userProfile = await response.json();
+      return userProfile.id || null;
+    } else {
+      console.error(
+        "Failed to fetch user profile from Graph API:",
+        response.status
+      );
+      return null;
+    }
+  } catch (error) {
+    console.error("Error fetching user profile from Graph API:", error);
+    return null;
   }
 }
