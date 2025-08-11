@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConfidentialClientApplication } from "@azure/msal-node";
+import { env } from "next-runtime-env";
 
 const msalConfig = {
   auth: {
-    clientId: process.env.NEXT_PUBLIC_AZURE_CLIENT_ID!,
-    clientSecret: process.env.AZURE_CLIENT_SECRET!,
+    clientId: env("NEXT_PUBLIC_AZURE_CLIENT_ID") || "",
+    clientSecret: env("AZURE_CLIENT_SECRET") || "",
     authority: `https://login.microsoftonline.com/${
-      process.env.AZURE_TENANT_ID || "common"
+      env("AZURE_TENANT_ID") || "common"
     }`,
   },
 };
@@ -18,8 +19,7 @@ export async function GET(request: NextRequest) {
     const authUrl = await msalClient.getAuthCodeUrl({
       scopes: ["Files.Read", "User.Read"],
       redirectUri:
-        process.env.AZURE_REDIRECT_URI ||
-        "http://localhost:3000/api/auth/callback",
+        env("AZURE_REDIRECT_URI") || "http://localhost:3000/api/auth/callback",
       responseMode: "query",
     });
 
