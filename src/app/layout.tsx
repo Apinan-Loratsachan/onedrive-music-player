@@ -35,7 +35,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${notoSansThai.variable} ${notoSansThai.className} antialiased`}
+        className={`${notoSansThai.variable} ${notoSansThai.className} antialiased select-none`}
       >
         <HeroUIProvider>
           <MsalProviderWrapper>{children}</MsalProviderWrapper>

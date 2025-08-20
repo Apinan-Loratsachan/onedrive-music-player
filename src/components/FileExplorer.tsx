@@ -5,7 +5,6 @@ import {
   Music,
   Folder,
   Play,
-  Pause,
   ArrowLeft,
   Home,
   FolderCheck,
@@ -27,7 +26,7 @@ import {
   DropdownItem,
 } from "@heroui/react";
 import RootPathSelector from "./RootPathSelector";
-import Visualizer from "./visualizer";
+import Visualizer from "@/components/Visualizer";
 
 // Extend Window interface to include our custom function
 declare global {
