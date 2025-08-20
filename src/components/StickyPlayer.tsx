@@ -60,6 +60,7 @@ export default function StickyPlayer({
   const [pendingSeekTime, setPendingSeekTime] = useState<number | null>(null);
   const [isSeeking, setIsSeeking] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [playSwitchSelected, setPlaySwitchSelected] = useState<boolean>(() => {
     try {
       if (typeof window === "undefined") return false;
@@ -466,7 +467,7 @@ export default function StickyPlayer({
               isDisabled={
                 !Number.isFinite(duration) || duration === 0 || isBuffering
               }
-              className="w-full absolute -top-3 left-0"
+              className="w-full absolute -top-3 left-0 cursor-pointer"
               aria-label="Seek"
             />
           </div>
@@ -481,49 +482,59 @@ export default function StickyPlayer({
         <div className="px-14 py-3">
           <div className="flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto">
             {/* Left: Track Info */}
-            <div
-              className="flex items-center space-x-4 min-w-0 flex-1 cursor-pointer"
-              onClick={() => setIsExpanded(true)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") setIsExpanded(true);
-              }}
-              title="Expand player"
-            >
-              {trackMeta?.picture ? (
-                <HeroImage
-                  isBlurred
-                  src={trackMeta.picture}
-                  alt="Album art"
-                  className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                />
-              ) : (
-                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <div className="w-6 h-6 text-blue-600 dark:text-blue-400 text-center">
-                    <i className="fa-solid fa-music fa-xl -translate-x-[0.5px]" />
+            <div className="flex items-center min-w-0 flex-1">
+              <div
+                className="z-100 cursor-pointer"
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+                onClick={() => setIsExpanded(true)}
+              >
+                {trackMeta?.picture ? (
+                  <HeroImage
+                    isBlurred
+                    src={trackMeta.picture}
+                    alt="Album art"
+                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center flex-shrink-0 z-100">
+                    <div className="w-6 h-6 text-blue-600 dark:text-blue-400 text-center">
+                      <i className="fa-solid fa-music fa-xl -translate-x-[0.5px]" />
+                    </div>
                   </div>
-                </div>
-              )}
-
-              <div className="min-w-0 flex-1">
-                <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  {trackMeta?.title || currentTrack.title || currentTrack.name}
-                </h4>
-                {(() => {
-                  const subtitle = [
-                    trackMeta?.artist || currentTrack.artist,
-                    trackMeta?.album || currentTrack.folder,
-                  ]
-                    .filter(Boolean)
-                    .join(" • ");
-                  return subtitle ? (
-                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                      {subtitle}
-                    </p>
-                  ) : null;
-                })()}
+                )}
               </div>
+              <Button
+                size="lg"
+                variant="light"
+                radius="sm"
+                className="text-left p-0 pl-8 pr-2 -translate-x-5"
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+                onPress={() => setIsExpanded(true)}
+                data-hover={isHovered}
+              >
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {trackMeta?.title ||
+                      currentTrack.title ||
+                      currentTrack.name}
+                  </h4>
+                  {(() => {
+                    const subtitle = [
+                      trackMeta?.artist || currentTrack.artist,
+                      trackMeta?.album || currentTrack.folder,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ");
+                    return subtitle ? (
+                      <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                        {subtitle}
+                      </p>
+                    ) : null;
+                  })()}
+                </div>
+              </Button>
             </div>
 
             {/* Center: Playback Controls */}
@@ -620,7 +631,7 @@ export default function StickyPlayer({
                 <Button
                   isIconOnly
                   variant="light"
-                  size="sm"
+                  // size="sm"
                   onPress={toggleMute}
                   className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 >

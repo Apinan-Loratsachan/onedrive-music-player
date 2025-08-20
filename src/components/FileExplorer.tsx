@@ -96,7 +96,7 @@ export default function FileExplorer({
   }, []);
 
   useEffect(() => {
-    console.log("FileExplorer: rootPath changed to:", rootPath);
+    // console.log("FileExplorer: rootPath changed to:", rootPath);
     // Initialize explorer location from saved music root ONCE after user settings load
     if (userSettingsLoaded && !hasInitializedFromSettings) {
       if (driveType === "shared") {
@@ -114,7 +114,7 @@ export default function FileExplorer({
   }, [rootPath, userSettingsLoaded, hasInitializedFromSettings, driveType]);
 
   useEffect(() => {
-    console.log("FileExplorer: currentPath changed to:", currentPath);
+    // console.log("FileExplorer: currentPath changed to:", currentPath);
     // Defer initial fetch until user settings are loaded to avoid double fetch
     if (!userSettingsLoaded) return;
 
@@ -152,10 +152,10 @@ export default function FileExplorer({
   };
 
   const fetchContents = async () => {
-    console.log(
-      "FileExplorer: fetchContents called with currentPath:",
-      currentPath
-    );
+    // console.log(
+    //   // "FileExplorer: fetchContents called with currentPath:",
+    //   currentPath
+    // );
 
     try {
       setLoading(true);
@@ -176,7 +176,7 @@ export default function FileExplorer({
 
       const queryString = queryParams.toString();
       const apiUrl = `/api/music${queryString ? `?${queryString}` : ""}`;
-      console.log("FileExplorer: Calling API:", apiUrl);
+      // console.log("FileExplorer: Calling API:", apiUrl);
 
       const response = await fetch(apiUrl);
 
@@ -190,7 +190,7 @@ export default function FileExplorer({
       }
 
       const data = await response.json();
-      console.log("FileExplorer: API response data:", data);
+      // console.log("FileExplorer: API response data:", data);
 
       setFiles(data.files || []);
       setFolders(data.folders || []);
@@ -208,9 +208,9 @@ export default function FileExplorer({
       console.error("Error fetching contents:", err);
     } finally {
       setLoading(false);
-      console.log(
-        "FileExplorer: fetchContents completed, loading set to false"
-      );
+      // console.log(
+      //   "FileExplorer: fetchContents completed, loading set to false"
+      // );
     }
   };
 
@@ -402,14 +402,14 @@ export default function FileExplorer({
   };
 
   if (loading) {
-    console.log(
-      "FileExplorer: Rendering loading state, currentPath:",
-      currentPath,
-      "files:",
-      files.length,
-      "folders:",
-      folders.length
-    );
+    // console.log(
+    //   "FileExplorer: Rendering loading state, currentPath:",
+    //   currentPath,
+    //   "files:",
+    //   files.length,
+    //   "folders:",
+    //   folders.length
+    // );
     return (
       <Card className="shadow-lg flex h-full">
         <CardBody className="p-6 overflow-auto h-full items-center justify-center">
@@ -442,18 +442,18 @@ export default function FileExplorer({
     );
   }
 
-  console.log(
-    "FileExplorer: About to render, currentPath:",
-    currentPath,
-    "files:",
-    files.length,
-    "folders:",
-    folders.length,
-    "loading:",
-    loading,
-    "error:",
-    error
-  );
+  // console.log(
+  //   "FileExplorer: About to render, currentPath:",
+  //   currentPath,
+  //   "files:",
+  //   files.length,
+  //   "folders:",
+  //   folders.length,
+  //   "loading:",
+  //   loading,
+  //   "error:",
+  //   error
+  // );
 
   return (
     <Card className="shadow-lg overflow-hidden w-full h-full">

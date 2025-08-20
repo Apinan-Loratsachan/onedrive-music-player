@@ -27,11 +27,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script
           src="https://kit.fontawesome.com/da71fc72b9.js"
           crossOrigin="anonymous"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "!function(){try{var t=localStorage.getItem('ui_theme')||'system';var m=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var d=document.documentElement;var u=t==='dark'||t==='system'&&m;u?d.classList.add('dark'):d.classList.remove('dark')}catch(e){}}();",
+          }}
         />
       </head>
       <body

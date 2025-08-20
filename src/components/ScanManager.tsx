@@ -531,7 +531,7 @@ export default function ScanManager() {
                     const response = await fetch("/api/music/scan?stats=true");
                     if (response.ok) {
                       const stats = await response.json();
-                      console.log("Cache Stats:", stats);
+                      // console.log("Cache Stats:", stats);
                       alert(
                         `Cache Stats:\nPaths: ${stats.totalPaths}\nFiles: ${
                           stats.totalFiles

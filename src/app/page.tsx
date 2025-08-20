@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { LogOut, Music, User } from "lucide-react";
+import { LogOut, User, Sun, Moon, Monitor } from "lucide-react";
 import { useMsal } from "@azure/msal-react";
 import StickyPlayer from "@/components/StickyPlayer";
 import FileExplorer from "@/components/FileExplorer";
 import ScanManager from "@/components/ScanManager";
 import TrackList from "@/components/TrackList";
 import Login from "@/components/Login";
-import { Button, Spinner, Tab, Tabs } from "@heroui/react";
+import { Button, Divider, Image, Spinner, Tab, Tabs } from "@heroui/react";
 
 interface MusicFile {
   id: string;
@@ -54,6 +54,61 @@ export default function Home() {
       return 0;
     }
   });
+
+  type ThemeMode = "system" | "light" | "dark";
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    try {
+      if (typeof window === "undefined") return "system";
+      const saved = window.localStorage.getItem("ui_theme");
+      return saved === "light" || saved === "dark" || saved === "system"
+        ? (saved as ThemeMode)
+        : "system";
+    } catch {
+      return "system";
+    }
+  });
+
+  const [isClientMounted, setIsClientMounted] = useState(false);
+  useEffect(() => {
+    setIsClientMounted(true);
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("ui_theme", themeMode);
+    } catch {}
+
+    const prefersDarkMedia = window.matchMedia("(prefers-color-scheme: dark)");
+
+    const applyTheme = () => {
+      const shouldUseDark =
+        themeMode === "dark" ||
+        (themeMode === "system" && prefersDarkMedia.matches);
+      const root = document.documentElement;
+      if (shouldUseDark) root.classList.add("dark");
+      else root.classList.remove("dark");
+    };
+
+    applyTheme();
+
+    if (themeMode === "system") {
+      try {
+        prefersDarkMedia.addEventListener("change", applyTheme);
+        return () => prefersDarkMedia.removeEventListener("change", applyTheme);
+      } catch {
+        // Safari < 14
+        prefersDarkMedia.addListener?.(applyTheme);
+        return () => prefersDarkMedia.removeListener?.(applyTheme);
+      }
+    }
+  }, [themeMode]);
+
+  const cycleThemeMode = () =>
+    setThemeMode((m) =>
+      m === "system" ? "light" : m === "light" ? "dark" : "system"
+    );
+
+  const effectiveThemeMode: ThemeMode = isClientMounted ? themeMode : "system";
 
   useEffect(() => {
     // Check if we're returning from OAuth with an error
@@ -177,7 +232,7 @@ export default function Home() {
 
   const handleNext = () => {
     if (!currentTrack || cachedTracks.length === 0) {
-      console.log("Next track - no cache available or no current track");
+      // console.log("Next track - no cache available or no current track");
       return;
     }
     if (shuffleEnabled) {
@@ -201,14 +256,14 @@ export default function Home() {
         setCurrentTrack(cachedTracks[0]);
         setIsPlaying(true);
       } else {
-        console.log("Next track - at end of cached list");
+        // console.log("Next track - at end of cached list");
       }
     }
   };
 
   const handlePrevious = () => {
     if (!currentTrack || cachedTracks.length === 0) {
-      console.log("Previous track - no cache available or no current track");
+      // console.log("Previous track - no cache available or no current track");
       return;
     }
     const index = cachedTracks.findIndex((t) => t.id === currentTrack.id);
@@ -216,7 +271,7 @@ export default function Home() {
       setCurrentTrack(cachedTracks[index - 1]);
       setIsPlaying(true);
     } else {
-      console.log("Previous track - at start of cached list");
+      // console.log("Previous track - at start of cached list");
     }
   };
 
@@ -307,15 +362,50 @@ export default function Home() {
         <div className="mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Music className="w-5 h-5 text-white" />
+              <div className="w-8 h-8 flex items-center justify-center">
+                <Image
+                  src="/logo.png"
+                  alt="Logo"
+                  width={32}
+                  height={32}
+                  className="w-8 h-8"
+                  radius="none"
+                />
               </div>
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-white translate-y-0.5">
                 OneDrive Music Player
               </h1>
             </div>
 
             <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 border-2 rounded-xl border-gray-200 dark:border-gray-700 py-1.5 px-2">
+                <i className="fa-solid fa-palette" />
+                <Divider orientation="vertical" className="h-4" />
+                <Button
+                  onPress={cycleThemeMode}
+                  variant="solid"
+                  size="sm"
+                  // className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  className="w-24 flex items-center justify-center"
+                  startContent={
+                    effectiveThemeMode === "system" ? (
+                      <Monitor className="w-4 h-4" />
+                    ) : effectiveThemeMode === "light" ? (
+                      <Sun className="w-4 h-4" />
+                    ) : (
+                      <Moon className="w-4 h-4" />
+                    )
+                  }
+                >
+                  <div className="translate-y-[1.5px]">
+                    {effectiveThemeMode === "system"
+                      ? "System"
+                      : effectiveThemeMode === "light"
+                      ? "Light"
+                      : "Dark"}
+                  </div>
+                </Button>
+              </div>
               {userProfile ? (
                 <div className="flex items-center space-x-3">
                   {/* User Photo */}
