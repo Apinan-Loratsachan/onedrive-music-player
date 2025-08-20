@@ -12,7 +12,7 @@ import {
   Repeat,
   Repeat1,
 } from "lucide-react";
-import { Button, Slider, Switch } from "@heroui/react";
+import { Button, Image as HeroImage, Slider, Switch } from "@heroui/react";
 
 interface StickyPlayerProps {
   currentTrack: {
@@ -71,6 +71,18 @@ export default function StickyPlayer({
   });
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  // Fetched metadata (ID3) for the current track
+  const [trackMeta, setTrackMeta] = useState<{
+    title: string | null;
+    artist: string | null;
+    album: string | null;
+    picture: string | null;
+  } | null>(null);
+  const [mediaArtwork, setMediaArtwork] = useState<{
+    src: string;
+    sizes?: string;
+  } | null>(null);
+
   useEffect(() => {
     if (currentTrack && audioRef.current) {
       audioRef.current.src = `/api/music/stream?fileId=${currentTrack.id}`;
@@ -78,14 +90,105 @@ export default function StickyPlayer({
     }
   }, [currentTrack]);
 
+  // Load ID3 metadata for the current track
+  useEffect(() => {
+    setTrackMeta(null);
+    if (!currentTrack?.id) return;
+    const controller = new AbortController();
+    let isAborted = false;
+    (async () => {
+      try {
+        const resp = await fetch(
+          `/api/music/metadata?fileId=${currentTrack.id}`,
+          {
+            signal: controller.signal,
+          }
+        );
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (isAborted) return;
+        setTrackMeta({
+          title: data?.title ?? null,
+          artist: data?.artist ?? null,
+          album: data?.album ?? null,
+          picture: typeof data?.picture === "string" ? data.picture : null,
+        });
+      } catch {}
+    })();
+    return () => {
+      isAborted = true;
+      controller.abort();
+    };
+  }, [currentTrack?.id]);
+
+  // Prepare media session artwork limited to max 1000px on either dimension
+  useEffect(() => {
+    setMediaArtwork(null);
+    const picture = trackMeta?.picture;
+    if (!picture) return;
+
+    let canceled = false;
+    const imgEl = new window.Image();
+    imgEl.onload = () => {
+      if (canceled) return;
+      const originalWidth = imgEl.naturalWidth || imgEl.width;
+      const originalHeight = imgEl.naturalHeight || imgEl.height;
+      const maxDim = 1000;
+      const maxOriginal = Math.max(originalWidth, originalHeight);
+      if (!maxOriginal || maxOriginal <= maxDim) {
+        setMediaArtwork({
+          src: picture,
+          sizes: `${originalWidth}x${originalHeight}`,
+        });
+        return;
+      }
+      const scale = maxDim / maxOriginal;
+      const targetWidth = Math.max(1, Math.round(originalWidth * scale));
+      const targetHeight = Math.max(1, Math.round(originalHeight * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        setMediaArtwork({ src: picture });
+        return;
+      }
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(imgEl, 0, 0, targetWidth, targetHeight);
+
+      // Prefer original mime type when possible
+      const isPng = picture.startsWith("data:image/png");
+      const mime = isPng ? "image/png" : "image/jpeg";
+      const dataUrl = canvas.toDataURL(mime, 0.92);
+      setMediaArtwork({
+        src: dataUrl,
+        sizes: `${targetWidth}x${targetHeight}`,
+      });
+    };
+    imgEl.onerror = () => {
+      if (canceled) return;
+      setMediaArtwork({ src: picture });
+    };
+    imgEl.src = picture;
+    return () => {
+      canceled = true;
+    };
+  }, [trackMeta?.picture, currentTrack?.id]);
+
   // Set up media session for system media controls
   useEffect(() => {
     if ("mediaSession" in navigator && currentTrack) {
+      const artwork = mediaArtwork
+        ? [{ src: mediaArtwork.src, sizes: mediaArtwork.sizes }]
+        : undefined;
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.title || currentTrack.name,
-        artist: currentTrack.artist || "Unknown Artist",
-        album: currentTrack.folder || "Unknown Album",
-      });
+        title: trackMeta?.title || currentTrack.title || currentTrack.name,
+        artist: trackMeta?.artist || currentTrack.artist || "Unknown Artist",
+        album: trackMeta?.album || currentTrack.folder || "Unknown Album",
+        artwork,
+      } as MediaMetadataInit);
 
       navigator.mediaSession.setActionHandler("play", () => {
         if (audioRef.current) {
@@ -151,6 +254,8 @@ export default function StickyPlayer({
     onPlayPauseChange,
     onNext,
     onPrevious,
+    trackMeta,
+    mediaArtwork,
   ]);
 
   // Sync internal isPlaying state with external prop and control audio
@@ -358,21 +463,38 @@ export default function StickyPlayer({
           <div className="flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto">
             {/* Left: Track Info */}
             <div className="flex items-center space-x-4 min-w-0 flex-1">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <div className="w-6 h-6 text-blue-600 dark:text-blue-400 text-center">
-                  <i className="fa-solid fa-music fa-xl -translate-x-[0.5px]" />
+              {trackMeta?.picture ? (
+                <HeroImage
+                  isBlurred
+                  src={trackMeta.picture}
+                  alt="Album art"
+                  className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="w-6 h-6 text-blue-600 dark:text-blue-400 text-center">
+                    <i className="fa-solid fa-music fa-xl -translate-x-[0.5px]" />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="min-w-0 flex-1">
                 <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  {currentTrack.title || currentTrack.name}
+                  {trackMeta?.title || currentTrack.title || currentTrack.name}
                 </h4>
-                {currentTrack.artist && (
-                  <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                    {currentTrack.artist}
-                  </p>
-                )}
+                {(() => {
+                  const subtitle = [
+                    trackMeta?.artist || currentTrack.artist,
+                    trackMeta?.album || currentTrack.folder,
+                  ]
+                    .filter(Boolean)
+                    .join(" • ");
+                  return subtitle ? (
+                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                      {subtitle}
+                    </p>
+                  ) : null;
+                })()}
               </div>
             </div>
 
