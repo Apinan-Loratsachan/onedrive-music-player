@@ -37,6 +37,47 @@ export default function ScanManager() {
   const [isStarting, setIsStarting] = useState(false);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
+  // Normalize incoming scan state payloads to ensure required defaults
+  const normalizeScanState = (input: any): ScanState => {
+    return {
+      isScanning: !!input?.isScanning,
+      currentPath: input?.currentPath || "",
+      scannedPaths: Array.isArray(input?.scannedPaths)
+        ? input.scannedPaths
+        : [],
+      totalItems: typeof input?.totalItems === "number" ? input.totalItems : 0,
+      scannedItems:
+        typeof input?.scannedItems === "number" ? input.scannedItems : 0,
+      startTime:
+        typeof input?.startTime === "number" ? input.startTime : Date.now(),
+      lastUpdate:
+        typeof input?.lastUpdate === "number" ? input.lastUpdate : Date.now(),
+      error: input?.error,
+      totalTopLevelFolders:
+        typeof input?.totalTopLevelFolders === "number"
+          ? input.totalTopLevelFolders
+          : 0,
+      scannedTopLevelFolders:
+        typeof input?.scannedTopLevelFolders === "number"
+          ? input.scannedTopLevelFolders
+          : 0,
+      topLevelFoldersPaths: Array.isArray(input?.topLevelFoldersPaths)
+        ? input.topLevelFoldersPaths
+        : [],
+      currentTopLevelFolder: input?.currentTopLevelFolder || "",
+      scaned:
+        typeof input?.scaned === "number"
+          ? input.scaned
+          : typeof input?.scannedTopLevelFolders === "number"
+          ? input.scannedTopLevelFolders
+          : 0,
+      scanedMusicFile:
+        typeof input?.scanedMusicFile === "number" ? input.scanedMusicFile : 0,
+      scanedFolder:
+        typeof input?.scanedFolder === "number" ? input.scanedFolder : 0,
+    };
+  };
+
   // Function to reset scan state (can be called externally)
   const resetScanState = () => {
     setScanState(null);
@@ -118,7 +159,7 @@ export default function ScanManager() {
         try {
           const payload = JSON.parse(e.data);
           if (payload?.scanState) {
-            setScanState(payload.scanState);
+            setScanState(normalizeScanState(payload.scanState));
             setLastChecked(new Date());
           }
         } catch {}
@@ -153,7 +194,7 @@ export default function ScanManager() {
       if (response.ok) {
         const data = await response.json();
         if (data.scanState) {
-          setScanState(data.scanState);
+          setScanState(normalizeScanState(data.scanState));
         }
         setLastChecked(new Date());
       }

@@ -45,6 +45,9 @@ interface MusicCache {
 
 interface UserSettings {
   musicRootPath: string;
+  driveType?: "personal" | "shared";
+  driveId?: string;
+  itemId?: string;
   lastUpdated: number;
 }
 
@@ -345,6 +348,9 @@ export async function getUserSettings(
       // Return default settings if file doesn't exist
       return {
         musicRootPath: "", // Empty string represents OneDrive root
+        driveType: "personal",
+        driveId: "",
+        itemId: "",
         lastUpdated: Date.now(),
       };
     }
@@ -365,6 +371,9 @@ export async function setUserSettings(
     // Get current settings and merge with new ones
     const currentSettings = (await getUserSettings(userId)) || {
       musicRootPath: "", // Empty string represents OneDrive root
+      driveType: "personal",
+      driveId: "",
+      itemId: "",
       lastUpdated: Date.now(),
     };
 

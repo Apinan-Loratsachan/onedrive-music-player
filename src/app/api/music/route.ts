@@ -25,13 +25,25 @@ export async function GET(request: NextRequest) {
     // Get user settings for the root path
     const userSettings = await getUserSettings(userId);
     const defaultRootPath = userSettings?.musicRootPath || ""; // Empty string represents OneDrive root
+    const defaultDriveType = userSettings?.driveType || "personal";
+    const defaultDriveId = userSettings?.driveId || "";
+    const defaultItemId = userSettings?.itemId || "";
 
     // Get the path parameter from the query string
     const { searchParams } = new URL(request.url);
-    const path = searchParams.get("path") || defaultRootPath;
-    const driveType = searchParams.get("driveType") || "personal"; // "personal" or "shared"
-    const driveId = searchParams.get("driveId") || "";
-    const itemId = searchParams.get("itemId") || "";
+    let path = searchParams.get("path") || defaultRootPath;
+    const driveType = searchParams.get("driveType") || defaultDriveType; // "personal" or "shared"
+    const driveId = searchParams.get("driveId") || defaultDriveId;
+    const itemId = searchParams.get("itemId") || defaultItemId;
+
+    // Normalize path to support variants like "/" for personal root
+    if (driveType === "personal") {
+      if (path === "/") path = "";
+      if (path.startsWith("/")) path = path.replace(/^\/+/, "");
+    } else {
+      // For shared, default to "shared" when unset or "/"
+      if (!path || path === "/") path = "shared";
+    }
 
     // First, try to get data from cache
     try {

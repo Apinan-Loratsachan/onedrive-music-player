@@ -18,12 +18,18 @@ interface RootPathSelectorProps {
   currentPath: string;
   onPathChange: (newPath: string) => void;
   currentExplorerPath?: string; // Add current explorer path prop
+  currentDriveType: "personal" | "shared";
+  currentDriveId?: string;
+  currentItemId?: string;
 }
 
 export default function RootPathSelector({
   currentPath,
   onPathChange,
   currentExplorerPath,
+  currentDriveType,
+  currentDriveId,
+  currentItemId,
 }: RootPathSelectorProps) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [path, setPath] = useState(currentPath);
@@ -50,7 +56,12 @@ export default function RootPathSelector({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ musicRootPath: path.trim() }),
+        body: JSON.stringify({
+          musicRootPath: path.trim(),
+          driveType: currentDriveType,
+          driveId: currentDriveId ?? "",
+          itemId: currentItemId ?? "",
+        }),
       });
 
       if (!response.ok) {

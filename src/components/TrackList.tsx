@@ -394,6 +394,7 @@ export default function TrackList({
               return (
                 <div key={key} className="shrink-0">
                   <Button
+                    isIconOnly
                     size="sm"
                     variant={isSelected ? "solid" : "light"}
                     color={isSelected ? "primary" : "default"}

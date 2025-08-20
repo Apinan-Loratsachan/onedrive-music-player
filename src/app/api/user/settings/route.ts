@@ -61,7 +61,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { musicRootPath } = body as { musicRootPath: string };
+    const { musicRootPath, driveType, driveId, itemId } = body as {
+      musicRootPath: string;
+      driveType?: "personal" | "shared";
+      driveId?: string;
+      itemId?: string;
+    };
 
     if (typeof musicRootPath !== "string") {
       return NextResponse.json(
@@ -85,26 +90,39 @@ export async function POST(request: NextRequest) {
       currentSettings?.musicRootPath !== musicRootPath.trim();
 
     // Update the settings
-    await setUserSettings(userId, { musicRootPath: musicRootPath.trim() });
+    await setUserSettings(userId, {
+      musicRootPath: musicRootPath.trim(),
+      driveType: driveType ?? "personal",
+      driveId: driveId ?? "",
+      itemId: itemId ?? "",
+    });
 
     // If the root path changed, clear the cache to force a fresh scan
     if (isRootPathChanging) {
       try {
         await clearUserCache(userId);
-        
+
         // Also clear the scan state to reset scanning status
         try {
-          const response = await fetch(`${request.nextUrl.origin}/api/music/scan`, {
-            method: 'DELETE',
-            headers: {
-              'Cookie': `access_token=${request.cookies.get("access_token")?.value}`,
-            },
-          });
+          const response = await fetch(
+            `${request.nextUrl.origin}/api/music/scan`,
+            {
+              method: "DELETE",
+              headers: {
+                Cookie: `access_token=${
+                  request.cookies.get("access_token")?.value
+                }`,
+              },
+            }
+          );
           if (!response.ok) {
             console.warn("Failed to clear scan state after root path change");
           }
         } catch (scanError) {
-          console.warn("Failed to clear scan state after root path change:", scanError);
+          console.warn(
+            "Failed to clear scan state after root path change:",
+            scanError
+          );
         }
       } catch (cacheError) {
         console.warn(
@@ -118,6 +136,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       message: "Settings updated successfully",
       musicRootPath: musicRootPath.trim(),
+      driveType: driveType ?? "personal",
+      driveId: driveId ?? "",
+      itemId: itemId ?? "",
       cacheCleared: isRootPathChanging,
     });
   } catch (error) {
@@ -151,7 +172,12 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const updates = body as Partial<{ musicRootPath: string }>;
+    const updates = body as Partial<{
+      musicRootPath: string;
+      driveType: "personal" | "shared";
+      driveId: string;
+      itemId: string;
+    }>;
 
     if (updates.musicRootPath !== undefined) {
       if (
@@ -181,20 +207,28 @@ export async function PATCH(request: NextRequest) {
     if (isRootPathChanging) {
       try {
         await clearUserCache(userId);
-        
+
         // Also clear the scan state to reset scanning status
         try {
-          const response = await fetch(`${request.nextUrl.origin}/api/music/scan`, {
-            method: 'DELETE',
-            headers: {
-              'Cookie': `access_token=${request.cookies.get("access_token")?.value}`,
-            },
-          });
+          const response = await fetch(
+            `${request.nextUrl.origin}/api/music/scan`,
+            {
+              method: "DELETE",
+              headers: {
+                Cookie: `access_token=${
+                  request.cookies.get("access_token")?.value
+                }`,
+              },
+            }
+          );
           if (!response.ok) {
             console.warn("Failed to clear scan state after root path change");
           }
         } catch (scanError) {
-          console.warn("Failed to clear scan state after root path change:", scanError);
+          console.warn(
+            "Failed to clear scan state after root path change:",
+            scanError
+          );
         }
       } catch (cacheError) {
         console.warn(

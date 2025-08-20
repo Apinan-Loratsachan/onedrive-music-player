@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   Home,
   FolderCheck,
+  ChevronDown,
 } from "lucide-react";
 import {
   Card,
@@ -81,8 +82,14 @@ export default function FileExplorer({
   const [pathHistory, setPathHistory] = useState<string[]>([]);
   const [pathNotFound, setPathNotFound] = useState(false);
   const [driveType, setDriveType] = useState<"personal" | "shared">("personal");
+  const [rootDriveType, setRootDriveType] = useState<"personal" | "shared">(
+    "personal"
+  );
   const [driveId, setDriveId] = useState("");
   const [itemId, setItemId] = useState("");
+  const [userSettingsLoaded, setUserSettingsLoaded] = useState(false);
+  const [hasInitializedFromSettings, setHasInitializedFromSettings] =
+    useState(false);
 
   useEffect(() => {
     fetchUserSettings();
@@ -90,22 +97,30 @@ export default function FileExplorer({
 
   useEffect(() => {
     console.log("FileExplorer: rootPath changed to:", rootPath);
-    if (rootPath !== "") {
-      setCurrentPath(rootPath);
-      setPathHistory([rootPath]);
+    // Initialize explorer location from saved music root ONCE after user settings load
+    if (userSettingsLoaded && !hasInitializedFromSettings) {
+      if (driveType === "shared") {
+        // For shared, start at shared root, not the saved personal path
+        setCurrentPath("shared");
+        setPathHistory(["shared"]);
+      } else {
+        // Personal: apply saved root path (can be empty for root)
+        setCurrentPath(rootPath);
+        setPathHistory([rootPath]);
+      }
+      setHasInitializedFromSettings(true);
       // Don't call fetchContents here, let the currentPath useEffect handle it
     }
-  }, [rootPath]);
+  }, [rootPath, userSettingsLoaded, hasInitializedFromSettings, driveType]);
 
   useEffect(() => {
     console.log("FileExplorer: currentPath changed to:", currentPath);
-    if (currentPath !== "") {
-      fetchContents();
-    } else if (currentPath === "" && rootPath === "") {
-      // Special case: when both are empty, we're at OneDrive root
-      fetchContents();
-    }
-  }, [currentPath, rootPath, driveType, driveId, itemId]);
+    // Defer initial fetch until user settings are loaded to avoid double fetch
+    if (!userSettingsLoaded) return;
+
+    // Always fetch when dependencies change; allow driveType switch to take effect immediately
+    fetchContents();
+  }, [currentPath, driveType, driveId, itemId, userSettingsLoaded]);
 
   const fetchUserSettings = async () => {
     try {
@@ -115,14 +130,24 @@ export default function FileExplorer({
         setRootPath(
           settings.musicRootPath || "" // Empty string represents OneDrive root
         );
+        if (
+          settings.driveType === "shared" ||
+          settings.driveType === "personal"
+        ) {
+          setRootDriveType(settings.driveType);
+          setDriveType(settings.driveType);
+        }
+        setUserSettingsLoaded(true);
       } else {
         // Fallback to default path
         setRootPath("");
+        setUserSettingsLoaded(true);
       }
     } catch (error) {
       console.error("Error fetching user settings:", error);
       // Fallback to default path
       setRootPath("");
+      setUserSettingsLoaded(true);
     }
   };
 
@@ -142,8 +167,9 @@ export default function FileExplorer({
       if (currentPath !== "") {
         queryParams.append("path", currentPath);
       }
-      if (driveType !== "personal") {
-        queryParams.append("driveType", driveType);
+      // Always include driveType to avoid falling back to saved settings
+      queryParams.append("driveType", driveType);
+      if (driveType === "shared") {
         if (driveId) queryParams.append("driveId", driveId);
         if (itemId) queryParams.append("itemId", itemId);
       }
@@ -260,7 +286,7 @@ export default function FileExplorer({
   const navigateToPersonal = () => {
     // Navigate to personal OneDrive
     setPathHistory([""]);
-    setCurrentPath("");
+    setCurrentPath("/");
     setPathNotFound(false);
     setDriveType("personal");
     setDriveId("");
@@ -286,43 +312,58 @@ export default function FileExplorer({
         <div className="mx-2">
           <Divider className="h-6 w-0.5" orientation="vertical" />
         </div>
+        <Dropdown>
+          <DropdownTrigger>
+            <Button
+              variant="light"
+              size="sm"
+              startContent={
+                driveType === "shared" ? (
+                  <Folder className="w-4 h-4" />
+                ) : (
+                  <Home className="w-4 h-4" />
+                )
+              }
+              endContent={<ChevronDown className="w-4 h-4" />}
+            >
+              {driveType === "shared" ? "Shared With Me" : "Personal OneDrive"}
+            </Button>
+          </DropdownTrigger>
+          <DropdownMenu
+            aria-label="Home navigation"
+            onAction={(key) => {
+              if (key === "personal") {
+                navigateToPersonal();
+              } else if (key === "shared") {
+                navigateToShared();
+              }
+            }}
+          >
+            <DropdownItem
+              key="personal"
+              startContent={<Home className="w-4 h-4" />}
+            >
+              Personal OneDrive
+            </DropdownItem>
+            <DropdownItem
+              key="shared"
+              startContent={<Folder className="w-4 h-4" />}
+            >
+              Shared With Me
+            </DropdownItem>
+          </DropdownMenu>
+        </Dropdown>
+        <div className="mx-2">
+          <Divider className="h-6 w-[1.5px]" orientation="vertical" />
+        </div>
         <Breadcrumbs>
-          <BreadcrumbItem>
-            <Dropdown>
-              <DropdownTrigger>
-                <Button
-                  variant="light"
-                  size="sm"
-                  startContent={<Home className="w-4 h-4" />}
-                >
-                  Home
-                </Button>
-              </DropdownTrigger>
-              <DropdownMenu
-                aria-label="Home navigation"
-                onAction={(key) => {
-                  if (key === "personal") {
-                    navigateToPersonal();
-                  } else if (key === "shared") {
-                    navigateToShared();
-                  }
-                }}
-              >
-                <DropdownItem
-                  key="personal"
-                  startContent={<Home className="w-4 h-4" />}
-                >
-                  Personal OneDrive
-                </DropdownItem>
-                <DropdownItem
-                  key="shared"
-                  startContent={<Folder className="w-4 h-4" />}
-                >
-                  Shared With Me
-                </DropdownItem>
-              </DropdownMenu>
-            </Dropdown>
-          </BreadcrumbItem>
+          {driveType === "personal" && (
+            <BreadcrumbItem>
+              <Button variant="light" size="sm" onPress={navigateToPersonal}>
+                ROOT
+              </Button>
+            </BreadcrumbItem>
+          )}
           {pathParts.map(
             (part, index) =>
               part !== "" && (
@@ -426,6 +467,9 @@ export default function FileExplorer({
               currentPath={rootPath}
               onPathChange={handleRootPathChange}
               currentExplorerPath={currentPath}
+              currentDriveType={driveType}
+              currentDriveId={driveId}
+              currentItemId={itemId}
             />
             {rootPath !== "" && (
               <div>
@@ -433,6 +477,7 @@ export default function FileExplorer({
                   variant="flat"
                   size="sm"
                   onPress={() => {
+                    setDriveType(rootDriveType);
                     setCurrentPath(rootPath);
                     setPathHistory([rootPath]);
                     setPathNotFound(false);
