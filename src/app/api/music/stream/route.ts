@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerAccessToken } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get("access_token")?.value;
+    const accessToken = await getServerAccessToken();
     const { searchParams } = new URL(request.url);
     const fileId = searchParams.get("fileId");
 

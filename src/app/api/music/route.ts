@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 import { getUserSettings, getUserIdFromGraphAPI } from "@/lib/storage";
+import { getServerAccessToken } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get("access_token")?.value;
+    const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
       return NextResponse.json(

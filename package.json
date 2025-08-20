@@ -9,15 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@azure/msal-browser": "^4.19.0",
-    "@azure/msal-node": "^3.7.0",
-    "@azure/msal-react": "^3.0.17",
     "@heroui/react": "^2.8.2",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.539.0",
     "music-metadata": "^11.8.3",
     "next": "15.4.6",
+    "next-auth": "^4.24.11",
     "next-runtime-env": "^3.3.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",

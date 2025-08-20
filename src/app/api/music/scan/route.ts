@@ -15,6 +15,7 @@ import {
   getUserSettings,
   clearScanState,
 } from "@/lib/storage";
+import { getServerAccessToken } from "@/lib/auth";
 
 interface ScanState {
   isScanning: boolean;
@@ -36,7 +37,7 @@ interface ScanState {
 
 export async function POST(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get("access_token")?.value;
+    const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
       return NextResponse.json(
@@ -416,7 +417,7 @@ async function resumeBackgroundScan(accessToken: string, userId: string) {
 // Add cache stats endpoint
 export async function GET(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get("access_token")?.value;
+    const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
       return NextResponse.json(
@@ -474,7 +475,7 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get("access_token")?.value;
+    const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
       return NextResponse.json(

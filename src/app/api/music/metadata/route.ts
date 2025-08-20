@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as mm from "music-metadata";
 import { Readable } from "stream";
+import { getServerAccessToken } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get("access_token")?.value;
+    const accessToken = await getServerAccessToken();
     const { searchParams } = new URL(request.url);
     const fileId = searchParams.get("fileId");
 

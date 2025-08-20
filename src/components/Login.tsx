@@ -3,26 +3,15 @@
 import { useState } from "react";
 import { LogIn, Music } from "lucide-react";
 import { Button, Card, CardBody, CardHeader, Divider } from "@heroui/react";
+import { signIn } from "next-auth/react";
 
 export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-
-      // Add a parameter to force account selection
-      const response = await fetch("/api/auth/login?prompt=select_account");
-
-      if (!response.ok) {
-        throw new Error("Failed to get login URL");
-      }
-
-      const data = await response.json();
-      window.location.href = data.authUrl;
-    } catch (error) {
-      console.error("Login error:", error);
-      alert("Failed to start login process. Please try again.");
+      await signIn("azure-ad", { callbackUrl: "/" });
     } finally {
       setIsLoading(false);
     }

@@ -7,10 +7,11 @@ import {
   getUserIdFromGraphAPI,
   clearUserCache,
 } from "@/lib/storage";
+import { getServerAccessToken } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get("access_token")?.value;
+    const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
       return NextResponse.json(
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get("access_token")?.value;
+    const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
       return NextResponse.json(
@@ -109,11 +110,6 @@ export async function POST(request: NextRequest) {
             `${request.nextUrl.origin}/api/music/scan`,
             {
               method: "DELETE",
-              headers: {
-                Cookie: `access_token=${
-                  request.cookies.get("access_token")?.value
-                }`,
-              },
             }
           );
           if (!response.ok) {
@@ -153,7 +149,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get("access_token")?.value;
+    const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
       return NextResponse.json(
@@ -215,11 +211,6 @@ export async function PATCH(request: NextRequest) {
             `${request.nextUrl.origin}/api/music/scan`,
             {
               method: "DELETE",
-              headers: {
-                Cookie: `access_token=${
-                  request.cookies.get("access_token")?.value
-                }`,
-              },
             }
           );
           if (!response.ok) {

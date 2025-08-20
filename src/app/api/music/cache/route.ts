@@ -4,12 +4,13 @@ import {
   getCachedData,
   getUserIdFromGraphAPI,
 } from "@/lib/storage";
+import { getServerAccessToken } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get("access_token")?.value;
+    const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
       return NextResponse.json(

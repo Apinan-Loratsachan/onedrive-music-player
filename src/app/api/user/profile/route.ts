@@ -1,9 +1,10 @@
 import { env } from "next-runtime-env";
 import { NextRequest, NextResponse } from "next/server";
+import { getServerAccessToken } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get("access_token")?.value;
+    const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
       return NextResponse.json(

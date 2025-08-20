@@ -18,7 +18,7 @@ The application uses the Microsoft Graph API to:
 1. **Browse Folders**: Uses the `/me/drive/root:/path:/children` endpoint to list folder contents
 2. **Navigate Structure**: Allows you to click into folders and navigate back
 3. **Play Audio**: Streams audio files directly from OneDrive for playback
-4. **Authentication**: Uses OAuth 2.0 for secure access to your OneDrive
+4. **Authentication**: Uses NextAuth with Azure AD for secure access to your OneDrive
 
 ## File Explorer Features
 
@@ -82,7 +82,7 @@ The application uses the Microsoft Graph API to:
 
 - **Frontend**: Next.js 15 with React 19, TypeScript, and HeroUI
 - **Backend**: Next.js API routes for Microsoft Graph API integration
-- **Authentication**: Microsoft Authentication Library (MSAL)
+- **Authentication**: NextAuth.js (Azure AD provider)
 - **Styling**: Tailwind CSS with HeroUI components
 - **Audio**: HTML5 Audio API with streaming support
 
@@ -90,8 +90,7 @@ The application uses the Microsoft Graph API to:
 
 - `GET /api/music?path=<path>` - Get contents of a specific folder
 - `GET /api/music/stream?fileId=<id>` - Stream audio file content
-- `GET /api/auth/login` - Initiate OAuth login
-- `GET /api/auth/callback` - Handle OAuth callback
+- NextAuth routes under `/api/auth/*` (handled internally by NextAuth)
 
 ## Recent Changes
 
