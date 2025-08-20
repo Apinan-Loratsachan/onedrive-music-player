@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Music, Play, Pause, Search, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Music, Play, Search, RefreshCw } from "lucide-react";
 import {
   Card,
   CardBody,
@@ -14,6 +14,7 @@ import {
   Select,
   SelectItem,
 } from "@heroui/react";
+import Visualizer from "@/components/visualizer";
 
 interface TrackItem {
   id: string;
@@ -456,7 +457,7 @@ export default function TrackList({
                 <div className="flex items-center space-x-3">
                   <div className="flex-shrink-0">
                     {currentTrackId === t.id && isPlaying ? (
-                      <Pause className="h-5 w-5 text-blue-600" />
+                      <Visualizer />
                     ) : (
                       <Play className="h-5 w-5 text-gray-400" />
                     )}

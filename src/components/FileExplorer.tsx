@@ -27,6 +27,7 @@ import {
   DropdownItem,
 } from "@heroui/react";
 import RootPathSelector from "./RootPathSelector";
+import Visualizer from "./visualizer";
 
 // Extend Window interface to include our custom function
 declare global {
@@ -474,7 +475,8 @@ export default function FileExplorer({
             {rootPath !== "" && (
               <div>
                 <Button
-                  variant="flat"
+                  variant={currentPath === rootPath ? "flat" : "shadow"}
+                  color={currentPath === rootPath ? "default" : "primary"}
                   size="sm"
                   onPress={() => {
                     setDriveType(rootDriveType);
@@ -550,7 +552,7 @@ export default function FileExplorer({
                 <div className="flex items-center space-x-3">
                   <div className="flex-shrink-0">
                     {currentTrackId === file.id && isPlaying ? (
-                      <Pause className="h-5 w-5 text-blue-600" />
+                      <Visualizer />
                     ) : (
                       <Play className="h-5 w-5 text-gray-400" />
                     )}

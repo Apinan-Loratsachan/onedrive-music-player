@@ -34,7 +34,9 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
       </head>
-      <body className={`${notoSansThai.variable} antialiased`}>
+      <body
+        className={`${notoSansThai.variable} ${notoSansThai.className} antialiased`}
+      >
         <HeroUIProvider>
           <MsalProviderWrapper>{children}</MsalProviderWrapper>
         </HeroUIProvider>

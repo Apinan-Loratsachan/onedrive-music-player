@@ -4,6 +4,33 @@
 @source "../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
 @custom-variant dark (&:is(.dark *));
 
+/* TrackList visualizer animation */
+@keyframes tracklist-bar-bounce {
+  0% {
+    transform: scaleY(0.3);
+  }
+  20% {
+    transform: scaleY(1);
+  }
+  40% {
+    transform: scaleY(0.5);
+  }
+  60% {
+    transform: scaleY(0.9);
+  }
+  80% {
+    transform: scaleY(0.4);
+  }
+  100% {
+    transform: scaleY(0.3);
+  }
+}
+
+.tracklist-visualizer-bar {
+  transform-origin: bottom center;
+  animation: tracklist-bar-bounce 1.2s infinite ease-in-out;
+}
+
 /* Custom slider styling */
 .slider {
   -webkit-appearance: none;
