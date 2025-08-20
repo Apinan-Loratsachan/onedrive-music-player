@@ -14,10 +14,21 @@ const msalConfig = {
   },
 };
 
-const msalClient = new ConfidentialClientApplication(msalConfig);
-
 export async function GET(request: NextRequest) {
   try {
+    // สร้าง instance ของ msalClient ภายในฟังก์ชัน
+    const msalClient = new ConfidentialClientApplication({
+      auth: {
+        clientId: env("NEXT_PUBLIC_AZURE_CLIENT_ID") || "",
+        clientSecret: env("AZURE_CLIENT_SECRET") || "",
+        authority: env("NEXT_PUBLIC_AZURE_TENANT_ID")
+          ? `https://login.microsoftonline.com/${env(
+              "NEXT_PUBLIC_AZURE_TENANT_ID"
+            )}`
+          : "https://login.microsoftonline.com/common",
+      },
+    });
+
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get("code");
     const error = searchParams.get("error");
