@@ -544,7 +544,7 @@ export default function StickyPlayer({
                 size="sm"
                 onPress={onPrevious}
                 isDisabled={!hasPrevious}
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                // className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
               >
                 <SkipBack size={18} />
               </Button>
@@ -552,9 +552,9 @@ export default function StickyPlayer({
               <Button
                 isIconOnly
                 color="primary"
+                variant="shadow"
                 size="lg"
                 onPress={togglePlayPause}
-                className="bg-blue-600 hover:bg-blue-700 shadow-lg"
                 isDisabled={isBuffering}
               >
                 {isBuffering ? (
@@ -572,7 +572,7 @@ export default function StickyPlayer({
                 size="sm"
                 onPress={onNext}
                 isDisabled={!hasNext && !shuffleEnabled && repeatMode !== 1}
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                // className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
               >
                 <SkipForward size={18} />
               </Button>
@@ -598,11 +598,11 @@ export default function StickyPlayer({
                   color={shuffleEnabled ? "primary" : "default"}
                   size="sm"
                   onPress={onToggleShuffle}
-                  className={`${
-                    shuffleEnabled
-                      ? "text-white"
-                      : "text-gray-600 hover:text-gray-900"
-                  } dark:text-gray-400 dark:hover:text-white`}
+                  // className={`${
+                  //   shuffleEnabled
+                  //     ? "text-white"
+                  //     : "text-gray-600 hover:text-gray-900"
+                  // } dark:text-gray-400 dark:hover:text-white`}
                 >
                   <Shuffle size={18} />
                 </Button>
@@ -612,11 +612,11 @@ export default function StickyPlayer({
                   color={repeatMode !== 0 ? "primary" : "default"}
                   size="sm"
                   onPress={onCycleRepeatMode}
-                  className={`${
-                    repeatMode !== 0
-                      ? "text-white"
-                      : "text-gray-600 hover:text-gray-900"
-                  } dark:text-gray-400 dark:hover:text-white`}
+                  // className={`${
+                  //   repeatMode !== 0
+                  //     ? "text-white"
+                  //     : "text-gray-600 hover:text-gray-900"
+                  // } dark:text-gray-400 dark:hover:text-white`}
                 >
                   {repeatMode === 2 ? (
                     <Repeat1 size={18} />
@@ -632,7 +632,7 @@ export default function StickyPlayer({
                   variant="light"
                   // size="sm"
                   onPress={toggleMute}
-                  className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  // className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 >
                   {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 </Button>

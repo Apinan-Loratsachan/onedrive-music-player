@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+export const runtime = "nodejs";
 import { getUserSettings, getUserIdFromGraphAPI } from "@/lib/storage";
 
 export async function GET(request: NextRequest) {
