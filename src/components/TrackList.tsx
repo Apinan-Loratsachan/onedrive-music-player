@@ -14,7 +14,7 @@ import {
   Select,
   SelectItem,
 } from "@heroui/react";
-import Visualizer from "@/components/Visualizer";
+import Visualizer from "./Visualizer";
 
 interface TrackItem {
   id: string;
