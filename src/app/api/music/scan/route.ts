@@ -235,6 +235,7 @@ async function scanTopLevelFolders(
       console.log(`[SCAN] ${userId} | ${topLevelPath}`);
       await setScanState(userId, preState);
 
+      let scannedOk = false;
       try {
         await scanFolderRecursive(
           accessToken,
@@ -242,9 +243,35 @@ async function scanTopLevelFolders(
           topLevelPath,
           freshState
         );
+        scannedOk = true;
       } catch (err) {
-        console.error(`Error scanning top-level folder ${topLevelPath}:`, err);
-        // continue to next folder
+        const msg = err instanceof Error ? err.message : String(err);
+        // If unauthorized during scan, refresh token once and retry this folder before resuming
+        if (msg.includes("401")) {
+          try {
+            const refreshed = await getServerAccessToken();
+            if (refreshed) {
+              await scanFolderRecursive(
+                refreshed,
+                userId,
+                topLevelPath,
+                freshState
+              );
+              scannedOk = true;
+            }
+          } catch (retryErr) {
+            console.error(
+              `Retry after token refresh failed for ${topLevelPath}:`,
+              retryErr
+            );
+          }
+        }
+        if (!scannedOk) {
+          console.error(
+            `Error scanning top-level folder ${topLevelPath}:`,
+            err
+          );
+        }
       }
 
       // After completing an entire top-level folder
@@ -369,13 +396,30 @@ async function fetchAllItemsWithPagination(
     currentUrl = `https://graph.microsoft.com/v1.0/me/drive/root:/${encodedPath}:/children`;
   }
 
+  let currentToken = accessToken;
   while (currentUrl) {
-    const response = await fetch(currentUrl, {
+    let response = await fetch(currentUrl, {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${currentToken}`,
         "Content-Type": "application/json",
       },
     });
+
+    // If unauthorized, try to refresh access token once and retry this URL
+    if (response.status === 401) {
+      try {
+        const refreshed = await getServerAccessToken();
+        if (refreshed) {
+          currentToken = refreshed;
+          response = await fetch(currentUrl, {
+            headers: {
+              Authorization: `Bearer ${currentToken}`,
+              "Content-Type": "application/json",
+            },
+          });
+        }
+      } catch {}
+    }
 
     if (!response.ok) {
       throw new Error(

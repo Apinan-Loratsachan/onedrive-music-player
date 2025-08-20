@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const downloadResponse = await fetch(
+    let downloadResponse = await fetch(
       `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`,
       {
         headers: {
@@ -35,6 +35,20 @@ export async function GET(request: NextRequest) {
         },
       }
     );
+
+    if (downloadResponse.status === 401) {
+      const refreshed = await getServerAccessToken();
+      if (refreshed) {
+        downloadResponse = await fetch(
+          `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`,
+          {
+            headers: {
+              Authorization: `Bearer ${refreshed}`,
+            },
+          }
+        );
+      }
+    }
 
     if (!downloadResponse.ok) {
       return NextResponse.json(

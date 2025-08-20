@@ -92,14 +92,30 @@ export async function GET(request: NextRequest) {
     const fetchAllItems = async (url: string): Promise<any[]> => {
       const allItems: any[] = [];
       let currentUrl = url;
+      let currentToken = accessToken;
 
       while (currentUrl) {
-        const response = await fetch(currentUrl, {
+        let response = await fetch(currentUrl, {
           headers: {
-            Authorization: `Bearer ${accessToken}`,
+            Authorization: `Bearer ${currentToken}`,
             "Content-Type": "application/json",
           },
         });
+
+        if (response.status === 401) {
+          try {
+            const refreshed = await getServerAccessToken();
+            if (refreshed) {
+              currentToken = refreshed;
+              response = await fetch(currentUrl, {
+                headers: {
+                  Authorization: `Bearer ${currentToken}`,
+                  "Content-Type": "application/json",
+                },
+              });
+            }
+          } catch {}
+        }
 
         if (!response.ok) {
           if (response.status === 404) {
@@ -176,7 +192,7 @@ export async function GET(request: NextRequest) {
       audioFiles.map(async (file: any) => {
         try {
           // Get file metadata from OneDrive
-          const metadataResponse = await fetch(
+          let metadataResponse = await fetch(
             `https://graph.microsoft.com/v1.0/me/drive/items/${file.id}?$select=id,name,size,lastModifiedDateTime,file,folder,parentReference`,
             {
               headers: {
@@ -185,6 +201,21 @@ export async function GET(request: NextRequest) {
               },
             }
           );
+
+          if (metadataResponse.status === 401) {
+            const refreshed = await getServerAccessToken();
+            if (refreshed) {
+              metadataResponse = await fetch(
+                `https://graph.microsoft.com/v1.0/me/drive/items/${file.id}?$select=id,name,size,lastModifiedDateTime,file,folder,parentReference`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${refreshed}`,
+                    "Content-Type": "application/json",
+                  },
+                }
+              );
+            }
+          }
 
           if (metadataResponse.ok) {
             const metadata = await metadataResponse.json();

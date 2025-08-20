@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the download URL for the file
-    const downloadResponse = await fetch(
+    let downloadResponse = await fetch(
       `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`,
       {
         headers: {
@@ -30,6 +30,20 @@ export async function GET(request: NextRequest) {
         },
       }
     );
+
+    if (downloadResponse.status === 401) {
+      const refreshed = await getServerAccessToken();
+      if (refreshed) {
+        downloadResponse = await fetch(
+          `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`,
+          {
+            headers: {
+              Authorization: `Bearer ${refreshed}`,
+            },
+          }
+        );
+      }
+    }
 
     if (!downloadResponse.ok) {
       throw new Error(`Failed to get download URL: ${downloadResponse.status}`);
