@@ -13,7 +13,6 @@ import {
   Repeat,
   Repeat1,
   ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import { Button, Image as HeroImage, Slider, Switch } from "@heroui/react";
 

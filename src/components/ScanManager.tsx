@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Play, Pause, RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
+import { Play, RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
 import {
   Card,
   CardBody,

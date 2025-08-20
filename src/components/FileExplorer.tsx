@@ -25,8 +25,8 @@ import {
   DropdownMenu,
   DropdownItem,
 } from "@heroui/react";
-import RootPathSelector from "./RootPathSelector";
-import Visualizer from "./Visualizer";
+import RootPathSelector from "@/components/RootPathSelector";
+import Visualizer from "@/components/Visualizer";
 
 // Extend Window interface to include our custom function
 declare global {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Music, Play, Search, RefreshCw } from "lucide-react";
 import {
   Card,
@@ -14,7 +14,7 @@ import {
   Select,
   SelectItem,
 } from "@heroui/react";
-import Visualizer from "./Visualizer";
+import Visualizer from "@/components/Visualizer";
 
 interface TrackItem {
   id: string;
