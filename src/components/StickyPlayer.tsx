@@ -674,7 +674,7 @@ export default function StickyPlayer({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0.9 }}
             transition={{ type: "spring", stiffness: 260, damping: 28 }}
-            drag="y"
+            // drag="y"
             dragElastic={0.2}
             onDragEnd={(e, info) => {
               if (info.offset.y > 160 || info.velocity.y > 600) {
@@ -683,33 +683,48 @@ export default function StickyPlayer({
             }}
             className="fixed inset-0 z-[110] bg-white dark:bg-gray-900"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-              <Button
-                isIconOnly
-                variant="light"
-                onPress={() => setIsExpanded(false)}
-                aria-label="Close full-screen"
-              >
-                <ChevronDown />
-              </Button>
-              <div className="min-w-0 text-center flex-1 px-2">
-                <div className="truncate font-semibold text-gray-900 dark:text-white">
-                  {trackMeta?.title || currentTrack.title || currentTrack.name}
-                </div>
-                <div className="truncate text-sm text-gray-500 dark:text-gray-400">
-                  {trackMeta?.artist ||
-                    currentTrack.artist ||
-                    currentTrack.folder}
-                  {trackMeta?.album && ` • "${trackMeta.album}"`}
-                </div>
-              </div>
-              <div className="w-[40px]" />
-            </div>
-
             {/* Content */}
-            <div className="h-[calc(100%-56px)] flex flex-col items-center overflow-y-auto">
-              <div className="w-full max-w-4xl p-6 pt-8 flex flex-col items-center gap-6">
+            <div className="h-full flex flex-col items-center overflow-y-auto">
+              <>
+                <div
+                  className="absolute top-0 left-0 w-full h-full"
+                  style={{
+                    backgroundImage: `url(${trackMeta?.picture})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    backgroundRepeat: "no-repeat",
+                  }}
+                />
+                <div className="absolute top-0 left-0 w-full h-full backdrop-blur-xl bg-black/0 dark:bg-black/50 transition-all duration-300" />
+                {/* Header */}
+                <div className="absolute top-0 left-0 w-full h-full z-200">
+                  <div className="flex items-center justify-between px-4 py-3 bg-white/20 dark:bg-black/20 backdrop-blur-3xl rounded-b-xl">
+                    <Button
+                      isIconOnly
+                      variant="light"
+                      onPress={() => setIsExpanded(false)}
+                      aria-label="Close full-screen"
+                    >
+                      <ChevronDown />
+                    </Button>
+                    <div className="min-w-0 text-center flex-1 px-2">
+                      <div className="truncate font-semibold text-gray-900 dark:text-white">
+                        {trackMeta?.title ||
+                          currentTrack.title ||
+                          currentTrack.name}
+                      </div>
+                      <div className="truncate text-sm text-gray-600 dark:text-gray-400">
+                        {trackMeta?.artist ||
+                          currentTrack.artist ||
+                          currentTrack.folder}
+                        {trackMeta?.album && ` • "${trackMeta.album}"`}
+                      </div>
+                    </div>
+                    <div className="w-[40px]" />
+                  </div>
+                </div>
+              </>
+              <div className="w-full h-full max-w-4xl p-6 pt-24 flex flex-col items-center gap-6 overflow-y-scroll">
                 {/* Artwork */}
                 <div className="w-full flex items-center justify-center">
                   {trackMeta?.picture ? (
@@ -720,7 +735,7 @@ export default function StickyPlayer({
                       className="w-[50vh] aspect-square rounded-2xl object-cover shadow-2xl"
                     />
                   ) : (
-                    <div className="w-full max-w-[640px] aspect-square rounded-2xl bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center shadow-2xl">
+                    <div className="w-[50vh] aspect-square rounded-2xl bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center shadow-2xl">
                       <div className="w-20 h-20 text-blue-600 dark:text-blue-400 text-center">
                         <i className="fa-solid fa-music fa-2xl -translate-x-[2px]" />
                       </div>
@@ -728,147 +743,154 @@ export default function StickyPlayer({
                   )}
                 </div>
 
-                {/* Seekbar */}
-                <div className="w-full px-2">
-                  <Slider
-                    size="md"
-                    step={0.01}
-                    minValue={0}
-                    maxValue={
-                      Number.isFinite(duration) && duration > 0 ? duration : 1
-                    }
-                    value={
-                      Number.isFinite(currentTime)
-                        ? Math.min(currentTime, duration || 0)
-                        : 0
-                    }
-                    onChange={(value) => {
-                      const newTime = Array.isArray(value) ? value[0] : value;
-                      if (!isNaN(newTime)) {
-                        setCurrentTime(newTime);
-                        setIsSeeking(true);
-                        setPendingSeekTime(newTime);
-                      }
-                    }}
-                    isDisabled={
-                      !Number.isFinite(duration) ||
-                      duration === 0 ||
-                      isBuffering
-                    }
-                    aria-label="Seek"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    <span>{formatTime(currentTime)}</span>
-                    <span>{formatTime(duration)}</span>
-                  </div>
-                </div>
-
-                {/* Controls */}
-                <div className="w-full flex flex-col items-center gap-4 pt-2">
-                  <div className="flex items-center gap-3">
-                    <Button
-                      isIconOnly
-                      variant={shuffleEnabled ? "shadow" : "light"}
-                      color={shuffleEnabled ? "primary" : "default"}
-                      size="md"
-                      onPress={onToggleShuffle}
-                      aria-label="Toggle shuffle"
-                    >
-                      <Shuffle />
-                    </Button>
-                    <Button
-                      isIconOnly
-                      variant="light"
-                      size="lg"
-                      onPress={onPrevious}
-                      isDisabled={!hasPrevious}
-                      aria-label="Previous"
-                    >
-                      <SkipBack size={22} />
-                    </Button>
-                    <Button
-                      isIconOnly
-                      color="primary"
-                      size="lg"
-                      onPress={togglePlayPause}
-                      isDisabled={isBuffering}
-                      className="bg-blue-600 hover:bg-blue-700 shadow-2xl w-16 h-16"
-                      aria-label={isPlaying ? "Pause" : "Play"}
-                    >
-                      {isBuffering ? (
-                        <i className="fa-solid fa-download fa-beat-fade" />
-                      ) : isPlaying ? (
-                        <Pause size={26} />
-                      ) : (
-                        <Play size={26} />
-                      )}
-                    </Button>
-                    <Button
-                      isIconOnly
-                      variant="light"
-                      size="lg"
-                      onPress={onNext}
-                      isDisabled={
-                        !hasNext && !shuffleEnabled && repeatMode !== 1
-                      }
-                      aria-label="Next"
-                    >
-                      <SkipForward size={22} />
-                    </Button>
-                    <Button
-                      isIconOnly
-                      variant={repeatMode !== 0 ? "shadow" : "light"}
-                      color={repeatMode !== 0 ? "primary" : "default"}
-                      size="md"
-                      onPress={onCycleRepeatMode}
-                      aria-label="Cycle repeat mode"
-                    >
-                      {repeatMode === 2 ? <Repeat1 /> : <Repeat />}
-                    </Button>
-                  </div>
-
-                  {/* Volume */}
-                  <div className="flex items-center gap-3">
-                    <Button
-                      isIconOnly
-                      variant="light"
-                      size="sm"
-                      onPress={toggleMute}
-                      aria-label={isMuted ? "Unmute" : "Mute"}
-                    >
-                      {isMuted ? <VolumeX /> : <Volume2 />}
-                    </Button>
+                <div className="w-[50vh] min-w-[370px] bg-white/20 dark:bg-gray-900/20 rounded-2xl p-4 shadow-2xl z-200 backdrop-blur-3xl">
+                  {/* Seekbar */}
+                  <div className="w-full px-2">
                     <Slider
-                      aria-label="Volume"
-                      size="sm"
+                      size="md"
                       step={0.01}
                       minValue={0}
-                      maxValue={1}
-                      value={isMuted ? 0 : volume}
-                      onChange={handleVolumeChange}
-                      className="w-40"
+                      maxValue={
+                        Number.isFinite(duration) && duration > 0 ? duration : 1
+                      }
+                      value={
+                        Number.isFinite(currentTime)
+                          ? Math.min(currentTime, duration || 0)
+                          : 0
+                      }
+                      onChange={(value) => {
+                        const newTime = Array.isArray(value) ? value[0] : value;
+                        if (!isNaN(newTime)) {
+                          setCurrentTime(newTime);
+                          setIsSeeking(true);
+                          setPendingSeekTime(newTime);
+                        }
+                      }}
+                      isDisabled={
+                        !Number.isFinite(duration) ||
+                        duration === 0 ||
+                        isBuffering
+                      }
+                      // className="bg-neutral-500"
+                      aria-label="Seek"
                       classNames={{
-                        track: "bg-gray-200 dark:bg-gray-700",
+                        track: "bg-neutral-200/20 dark:bg-neutral-900/20",
                         filler: "bg-blue-600",
                         thumb: "bg-blue-600",
                       }}
                     />
+                    <div className="flex justify-between text-xs mt-1">
+                      <span>{formatTime(currentTime)}</span>
+                      <span>{formatTime(duration)}</span>
+                    </div>
                   </div>
 
-                  {/* Autoplay switch */}
-                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 pt-2">
-                    <span>Autoplay</span>
-                    <Switch
-                      isSelected={playSwitchSelected}
-                      onValueChange={setPlaySwitchSelected}
-                      thumbIcon={({ isSelected }) =>
-                        isSelected ? (
-                          <i className="fa-solid fa-play text-black translate-x-[1px]" />
+                  {/* Controls */}
+                  <div className="w-full flex flex-col items-center gap-4 pt-2">
+                    <div className="flex items-center gap-3">
+                      <Button
+                        isIconOnly
+                        variant={shuffleEnabled ? "shadow" : "light"}
+                        color={shuffleEnabled ? "primary" : "default"}
+                        size="md"
+                        onPress={onToggleShuffle}
+                        aria-label="Toggle shuffle"
+                      >
+                        <Shuffle />
+                      </Button>
+                      <Button
+                        isIconOnly
+                        variant="light"
+                        size="lg"
+                        onPress={onPrevious}
+                        isDisabled={!hasPrevious}
+                        aria-label="Previous"
+                      >
+                        <SkipBack size={22} />
+                      </Button>
+                      <Button
+                        isIconOnly
+                        color="primary"
+                        size="lg"
+                        onPress={togglePlayPause}
+                        isDisabled={isBuffering}
+                        className="bg-blue-600 hover:bg-blue-700 shadow-2xl w-16 h-16"
+                        aria-label={isPlaying ? "Pause" : "Play"}
+                      >
+                        {isBuffering ? (
+                          <i className="fa-solid fa-download fa-beat-fade" />
+                        ) : isPlaying ? (
+                          <Pause size={26} />
                         ) : (
-                          <i className="fa-solid fa-pause" />
-                        )
-                      }
-                    />
+                          <Play size={26} />
+                        )}
+                      </Button>
+                      <Button
+                        isIconOnly
+                        variant="light"
+                        size="lg"
+                        onPress={onNext}
+                        isDisabled={
+                          !hasNext && !shuffleEnabled && repeatMode !== 1
+                        }
+                        aria-label="Next"
+                      >
+                        <SkipForward size={22} />
+                      </Button>
+                      <Button
+                        isIconOnly
+                        variant={repeatMode !== 0 ? "shadow" : "light"}
+                        color={repeatMode !== 0 ? "primary" : "default"}
+                        size="md"
+                        onPress={onCycleRepeatMode}
+                        aria-label="Cycle repeat mode"
+                      >
+                        {repeatMode === 2 ? <Repeat1 /> : <Repeat />}
+                      </Button>
+                    </div>
+
+                    {/* Volume */}
+                    <div className="flex items-center gap-3">
+                      <Button
+                        isIconOnly
+                        variant="light"
+                        size="sm"
+                        onPress={toggleMute}
+                        aria-label={isMuted ? "Unmute" : "Mute"}
+                      >
+                        {isMuted ? <VolumeX /> : <Volume2 />}
+                      </Button>
+                      <Slider
+                        aria-label="Volume"
+                        size="sm"
+                        step={0.01}
+                        minValue={0}
+                        maxValue={1}
+                        value={isMuted ? 0 : volume}
+                        onChange={handleVolumeChange}
+                        className="w-40"
+                        classNames={{
+                          track: "bg-gray-200 dark:bg-gray-700",
+                          filler: "bg-blue-600",
+                          thumb: "bg-blue-600",
+                        }}
+                      />
+                    </div>
+
+                    {/* Autoplay switch */}
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 pt-2">
+                      <Switch
+                        isSelected={playSwitchSelected}
+                        onValueChange={setPlaySwitchSelected}
+                        thumbIcon={({ isSelected }) =>
+                          isSelected ? (
+                            <i className="fa-solid fa-play text-black translate-x-[1px]" />
+                          ) : (
+                            <i className="fa-solid fa-pause" />
+                          )
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

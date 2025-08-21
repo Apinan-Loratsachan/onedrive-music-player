@@ -15,6 +15,7 @@ import {
   SelectItem,
 } from "@heroui/react";
 import Visualizer from "@/components/Visualizer";
+import { Virtuoso } from "react-virtuoso";
 
 interface TrackItem {
   id: string;
@@ -272,6 +273,40 @@ export default function TrackList({
     );
   }, [filtered, selectedLetter, removePrefix]);
 
+  const sortedItems = useMemo(() => {
+    const items = [...alphaFiltered];
+    const compare = (a: string, b: string) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" });
+    items.sort((a, b) => {
+      const titleA = getDisplayTitle(a.title || a.name);
+      const titleB = getDisplayTitle(b.title || b.name);
+      const artistA = a.artist || "";
+      const artistB = b.artist || "";
+      const folderA = a.folder || "";
+      const folderB = b.folder || "";
+      if (orderBy === "artist") {
+        const c = compare(artistA, artistB);
+        if (c !== 0) return c;
+        const ct = compare(titleA, titleB);
+        if (ct !== 0) return ct;
+        return compare(folderA, folderB);
+      }
+      if (orderBy === "folder") {
+        const c = compare(folderA, folderB);
+        if (c !== 0) return c;
+        const ca = compare(artistA, artistB);
+        if (ca !== 0) return ca;
+        return compare(titleA, titleB);
+      }
+      const c = compare(titleA, titleB);
+      if (c !== 0) return c;
+      const ca = compare(artistA, artistB);
+      if (ca !== 0) return ca;
+      return compare(folderA, folderB);
+    });
+    return items;
+  }, [alphaFiltered, orderBy, removePrefix]);
+
   if (loading) {
     return (
       <Card className="shadow-lg flex h-full">
@@ -324,7 +359,7 @@ export default function TrackList({
   }
 
   return (
-    <Card className="shadow-lg overflow-hidden w-full h-full">
+    <Card className="shadow-lg overflow-hidden w-full h-full flex flex-col">
       <CardHeader className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3 w-full">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -411,43 +446,13 @@ export default function TrackList({
         </div>
       </CardHeader>
 
-      <CardBody className="p-0">
-        <div className="max-h-full overflow-y-auto">
-          {(() => {
-            const items = [...alphaFiltered];
-            const compare = (a: string, b: string) =>
-              a.localeCompare(b, undefined, { sensitivity: "base" });
-            items.sort((a, b) => {
-              const titleA = getDisplayTitle(a.title || a.name);
-              const titleB = getDisplayTitle(b.title || b.name);
-              const artistA = a.artist || "";
-              const artistB = b.artist || "";
-              const folderA = a.folder || "";
-              const folderB = b.folder || "";
-              if (orderBy === "artist") {
-                const c = compare(artistA, artistB);
-                if (c !== 0) return c;
-                const ct = compare(titleA, titleB);
-                if (ct !== 0) return ct;
-                return compare(folderA, folderB);
-              }
-              if (orderBy === "folder") {
-                const c = compare(folderA, folderB);
-                if (c !== 0) return c;
-                const ca = compare(artistA, artistB);
-                if (ca !== 0) return ca;
-                return compare(titleA, titleB);
-              }
-              const c = compare(titleA, titleB);
-              if (c !== 0) return c;
-              const ca = compare(artistA, artistB);
-              if (ca !== 0) return ca;
-              return compare(folderA, folderB);
-            });
-            return items;
-          })().map((t, index) => (
+      <CardBody className="p-0 h-full flex-1 min-h-0">
+        <Virtuoso
+          style={{ height: "100%" }}
+          data={sortedItems}
+          overscan={400}
+          itemContent={(index, t) => (
             <div
-              key={t.id}
               className={`px-6 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
                 currentTrackId === t.id ? "bg-blue-50 dark:bg-blue-900/20" : ""
               }`}
@@ -492,8 +497,8 @@ export default function TrackList({
                 <div className="text-xs text-gray-400">#{index + 1}</div>
               </div>
             </div>
-          ))}
-        </div>
+          )}
+        />
       </CardBody>
     </Card>
   );

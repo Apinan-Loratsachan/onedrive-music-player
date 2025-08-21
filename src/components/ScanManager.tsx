@@ -307,6 +307,7 @@ export default function ScanManager() {
       <CardBody className="px-6 py-4 space-y-4 overflow-hidden">
         <Accordion>
           <AccordionItem
+            className="cursor-pointer"
             key="scanning"
             title={
               <div className="flex items-center gap-2">
