@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Music, Play, Search, RefreshCw } from "lucide-react";
 import {
   Card,
@@ -47,7 +47,9 @@ export default function TrackList({
   const [total, setTotal] = useState<number | null>(null);
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadingAll, setLoadingAll] = useState(false);
   const PAGE_SIZE = 300;
+  const prefetchVersionRef = useRef(0);
   const [query, setQuery] = useState("");
   const [removePrefix, setRemovePrefix] = useState<boolean>(() => {
     try {
@@ -204,6 +206,8 @@ export default function TrackList({
       setError(null);
       setTotal(null);
       setNextCursor(null);
+      // bump prefetch version to cancel any ongoing background loads
+      prefetchVersionRef.current += 1;
       const response = await fetch(`/api/music/cache?limit=${PAGE_SIZE}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -225,7 +229,7 @@ export default function TrackList({
   };
 
   const loadMoreFromCache = async () => {
-    if (isLoadingMore) return;
+    if (isLoadingMore || loadingAll) return;
     if (nextCursor === null) return;
     try {
       setIsLoadingMore(true);
@@ -258,6 +262,61 @@ export default function TrackList({
       setIsLoadingMore(false);
     }
   };
+
+  // Background prefetch of all remaining pages after initial load
+  const prefetchAllRemaining = async (startCursor?: number | null) => {
+    const myVersion = ++prefetchVersionRef.current;
+    try {
+      setLoadingAll(true);
+      let cursor: number | null =
+        typeof startCursor === "number" ? startCursor : nextCursor;
+      while (typeof cursor === "number") {
+        // cancelled by new load or unmount
+        if (prefetchVersionRef.current !== myVersion) break;
+        const response = await fetch(
+          `/api/music/cache?limit=${PAGE_SIZE}&cursor=${cursor}`
+        );
+        if (!response.ok) break;
+        const data = await response.json();
+        const newTracks: TrackItem[] = Array.isArray(data.tracks)
+          ? data.tracks
+          : [];
+        setTracks((prev) => {
+          const seen = new Set(prev.map((t) => t.id));
+          const merged = [...prev];
+          for (const t of newTracks) {
+            if (!seen.has(t.id)) merged.push(t);
+          }
+          return merged;
+        });
+        if (typeof data.total === "number") setTotal(data.total);
+        const next =
+          typeof data.nextCursor === "number" ? data.nextCursor : null;
+        setNextCursor(next);
+        cursor = next;
+      }
+    } catch {
+      // ignore background errors
+    } finally {
+      if (prefetchVersionRef.current === myVersion) setLoadingAll(false);
+    }
+  };
+
+  // Kick off background prefetch when initial page is available
+  useEffect(() => {
+    if (!loading && tracks.length > 0 && nextCursor !== null) {
+      // do not await
+      void prefetchAllRemaining(nextCursor);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  // Cancel background prefetch on unmount
+  useEffect(() => {
+    return () => {
+      prefetchVersionRef.current += 1;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     const q = normalizeText(query);

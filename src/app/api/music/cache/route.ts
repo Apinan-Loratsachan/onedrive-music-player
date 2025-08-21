@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  getAllCachedPaths,
-  getCachedData,
-  getUserIdFromGraphAPI,
-  getAllCachedPathEntries,
-} from "@/lib/storage";
+import { getUserIdFromGraphAPI, getAllCachedPathEntries } from "@/lib/storage";
 import { getServerAccessToken } from "@/lib/auth";
 
 export const runtime = "nodejs";
