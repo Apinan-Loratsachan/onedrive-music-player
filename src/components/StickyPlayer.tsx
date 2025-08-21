@@ -673,7 +673,7 @@ export default function StickyPlayer({
             initial={{ y: "100%", opacity: 0.9 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0.9 }}
-            transition={{ type: "spring", stiffness: 260, damping: 28 }}
+            transition={{ type: "keyframes", duration: 0.4, ease: "circInOut" }}
             // drag="y"
             dragElastic={0.2}
             onDragEnd={(e, info) => {
@@ -695,7 +695,7 @@ export default function StickyPlayer({
                     backgroundRepeat: "no-repeat",
                   }}
                 />
-                <div className="absolute top-0 left-0 w-full h-full backdrop-blur-xl bg-black/0 dark:bg-black/50 transition-all duration-300" />
+                <div className="absolute top-0 left-0 w-full h-full backdrop-blur-xl md:backdrop-blur-2xl bg-black/0 dark:bg-black/50 transition-all duration-300" />
                 {/* Header */}
                 <div className="absolute top-0 left-0 w-full h-full z-200">
                   <div className="flex items-center justify-between px-4 py-3 bg-white/20 dark:bg-black/20 backdrop-blur-3xl rounded-b-xl">

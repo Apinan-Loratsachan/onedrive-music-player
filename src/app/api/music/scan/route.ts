@@ -14,8 +14,10 @@ import {
   getUserIdFromGraphAPI,
   getUserSettings,
   clearScanState,
+  getUserIdFromCookies,
 } from "@/lib/storage";
 import { getServerAccessToken } from "@/lib/auth";
+import { cookies } from "next/headers";
 
 interface ScanState {
   isScanning: boolean;
@@ -40,6 +42,18 @@ export async function POST(request: NextRequest) {
     const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
+      // Best-effort: release any lock for this user (identified via cookies) on 401
+      try {
+        const cookieUserId = getUserIdFromCookies(cookies());
+        if (cookieUserId) {
+          await releaseScanLock(cookieUserId);
+          await updateScanState(cookieUserId, {
+            isScanning: false,
+            error: "Unauthorized: no access token",
+            lastUpdate: Date.now(),
+          });
+        }
+      } catch {}
       return NextResponse.json(
         { error: "No access token found" },
         { status: 401 }
@@ -50,6 +64,18 @@ export async function POST(request: NextRequest) {
     const userId = await getUserIdFromGraphAPI(accessToken);
 
     if (!userId) {
+      // Best-effort: release any lock for this user (identified via cookies) on 401
+      try {
+        const cookieUserId = getUserIdFromCookies(cookies());
+        if (cookieUserId) {
+          await releaseScanLock(cookieUserId);
+          await updateScanState(cookieUserId, {
+            isScanning: false,
+            error: "Unauthorized: user not authenticated",
+            lastUpdate: Date.now(),
+          });
+        }
+      } catch {}
       return NextResponse.json(
         { error: "User not authenticated" },
         { status: 401 }
@@ -80,10 +106,21 @@ export async function POST(request: NextRequest) {
 
       // Prevent multiple concurrent starts (process-level lock)
       if (await hasScanLock(userId)) {
-        return NextResponse.json({
-          message: "Scan lock present; another scan is starting/running",
-          status: "locked",
-        });
+        // Self-heal stale or forced locks
+        const stale =
+          !existing?.lastUpdate ||
+          Date.now() - (existing.lastUpdate || 0) > 2 * 60 * 1000;
+        const notScanning = existing && existing.isScanning === false;
+        if (forceRestart || stale || notScanning) {
+          try {
+            await releaseScanLock(userId);
+          } catch {}
+        } else {
+          return NextResponse.json({
+            message: "Scan lock present; another scan is starting/running",
+            status: "locked",
+          });
+        }
       }
 
       // If we have previous progress and not forcing restart, resume instead
@@ -125,6 +162,19 @@ export async function POST(request: NextRequest) {
 
     if (resumeScan) {
       // Resume interrupted scan
+      // Self-heal if a stale lock is present before resuming
+      const existing = await getScanState(userId);
+      if (await hasScanLock(userId)) {
+        const stale =
+          !existing?.lastUpdate ||
+          Date.now() - (existing.lastUpdate || 0) > 2 * 60 * 1000;
+        const notScanning = existing && existing.isScanning === false;
+        if (forceRestart || stale || notScanning) {
+          try {
+            await releaseScanLock(userId);
+          } catch {}
+        }
+      }
       const result = await resumeBackgroundScan(accessToken, userId);
       return NextResponse.json(result);
     }
@@ -464,6 +514,18 @@ export async function GET(request: NextRequest) {
     const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
+      // Best-effort: release any lock for this user (identified via cookies) on 401
+      try {
+        const cookieUserId = getUserIdFromCookies(cookies());
+        if (cookieUserId) {
+          await releaseScanLock(cookieUserId);
+          await updateScanState(cookieUserId, {
+            isScanning: false,
+            error: "Unauthorized: no access token",
+            lastUpdate: Date.now(),
+          });
+        }
+      } catch {}
       return NextResponse.json(
         { error: "No access token found" },
         { status: 401 }
@@ -474,6 +536,18 @@ export async function GET(request: NextRequest) {
     const userId = await getUserIdFromGraphAPI(accessToken);
 
     if (!userId) {
+      // Best-effort: release any lock for this user (identified via cookies) on 401
+      try {
+        const cookieUserId = getUserIdFromCookies(cookies());
+        if (cookieUserId) {
+          await releaseScanLock(cookieUserId);
+          await updateScanState(cookieUserId, {
+            isScanning: false,
+            error: "Unauthorized: user not authenticated",
+            lastUpdate: Date.now(),
+          });
+        }
+      } catch {}
       return NextResponse.json(
         { error: "User not authenticated" },
         { status: 401 }
@@ -522,6 +596,14 @@ export async function DELETE(request: NextRequest) {
     const accessToken = await getServerAccessToken();
 
     if (!accessToken) {
+      // Best-effort: release any lock for this user (identified via cookies) on 401
+      try {
+        const cookieUserId = getUserIdFromCookies(cookies());
+        if (cookieUserId) {
+          await releaseScanLock(cookieUserId);
+          await clearScanState(cookieUserId);
+        }
+      } catch {}
       return NextResponse.json(
         { error: "No access token found" },
         { status: 401 }
@@ -532,6 +614,14 @@ export async function DELETE(request: NextRequest) {
     const userId = await getUserIdFromGraphAPI(accessToken);
 
     if (!userId) {
+      // Best-effort: release any lock for this user (identified via cookies) on 401
+      try {
+        const cookieUserId = getUserIdFromCookies(cookies());
+        if (cookieUserId) {
+          await releaseScanLock(cookieUserId);
+          await clearScanState(cookieUserId);
+        }
+      } catch {}
       return NextResponse.json(
         { error: "User not authenticated" },
         { status: 401 }
