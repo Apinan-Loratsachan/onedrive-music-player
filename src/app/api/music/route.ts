@@ -192,28 +192,26 @@ export async function GET(request: NextRequest) {
       audioFiles.map(async (file: any) => {
         try {
           // Get file metadata from OneDrive
-          let metadataResponse = await fetch(
-            `https://graph.microsoft.com/v1.0/me/drive/items/${file.id}?$select=id,name,size,lastModifiedDateTime,file,folder,parentReference`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-            }
-          );
+          const buildMetaUrl = () =>
+            driveType === "shared" && driveId
+              ? `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${file.id}?$select=id,name,size,lastModifiedDateTime,file,folder,parentReference`
+              : `https://graph.microsoft.com/v1.0/me/drive/items/${file.id}?$select=id,name,size,lastModifiedDateTime,file,folder,parentReference`;
+          let metadataResponse = await fetch(buildMetaUrl(), {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+          });
 
           if (metadataResponse.status === 401) {
             const refreshed = await getServerAccessToken();
             if (refreshed) {
-              metadataResponse = await fetch(
-                `https://graph.microsoft.com/v1.0/me/drive/items/${file.id}?$select=id,name,size,lastModifiedDateTime,file,folder,parentReference`,
-                {
-                  headers: {
-                    Authorization: `Bearer ${refreshed}`,
-                    "Content-Type": "application/json",
-                  },
-                }
-              );
+              metadataResponse = await fetch(buildMetaUrl(), {
+                headers: {
+                  Authorization: `Bearer ${refreshed}`,
+                  "Content-Type": "application/json",
+                },
+              });
             }
           }
 
@@ -231,6 +229,7 @@ export async function GET(request: NextRequest) {
               title: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension
               artist: folderPath, // Use folder name as artist for now
               lastModified: metadata.lastModifiedDateTime,
+              driveId: driveType === "shared" ? driveId : undefined,
             };
           }
 

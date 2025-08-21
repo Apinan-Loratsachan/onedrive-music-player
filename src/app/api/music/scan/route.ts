@@ -137,9 +137,41 @@ export async function POST(request: NextRequest) {
         existing.lastUpdate = Date.now();
         await setScanState(userId, existing);
         if (await acquireScanLock(userId)) {
-          scanTopLevelFolders(accessToken, userId, existing).finally(() =>
-            releaseScanLock(userId)
-          );
+          (async () => {
+            try {
+              const settings = await getUserSettings(userId);
+              const driveType = settings?.driveType || "personal";
+              if (
+                driveType === "shared" &&
+                settings?.driveId &&
+                settings?.itemId
+              ) {
+                const children = await fetchChildrenFromDrive(
+                  accessToken,
+                  settings.driveId,
+                  settings.itemId
+                );
+                const topLevel = children
+                  .filter((c: any) => c.folder)
+                  .map((c: any) => ({
+                    name: c.name as string,
+                    id: c.id as string,
+                  }));
+                await scanTopLevelFoldersShared(
+                  accessToken,
+                  userId,
+                  existing,
+                  settings.driveId,
+                  settings.itemId,
+                  topLevel
+                );
+              } else {
+                await scanTopLevelFolders(accessToken, userId, existing);
+              }
+            } finally {
+              await releaseScanLock(userId);
+            }
+          })();
         }
         return NextResponse.json({
           message: "Resuming previous scan",
@@ -196,10 +228,41 @@ async function startBackgroundScan(accessToken: string, userId: string) {
     const mainLibraryPath = userSettings?.musicRootPath || ""; // Empty string represents OneDrive root
 
     // Prime cache for the music library root itself (files and immediate folders)
-    const mainChildren = await fetchAllItemsWithPagination(
-      accessToken,
-      mainLibraryPath
-    );
+    const driveType = userSettings?.driveType || "personal";
+    const sharedDriveId = userSettings?.driveId || "";
+    const sharedRootItemId = userSettings?.itemId || "";
+    let mainChildren: any[] = [];
+    if (driveType === "shared") {
+      if (!sharedDriveId || !sharedRootItemId) {
+        await setScanState(userId, {
+          isScanning: false,
+          currentPath: mainLibraryPath,
+          scannedPaths: [],
+          startTime: Date.now(),
+          lastUpdate: Date.now(),
+          totalTopLevelFolders: 0,
+          scannedTopLevelFolders: 0,
+          topLevelFoldersPaths: [],
+          currentTopLevelFolder: undefined,
+          scaned: 0,
+          scanedMusicFile: 0,
+          scanedFolder: 0,
+          error:
+            "Shared drive is not configured (driveId/itemId). Use Set Music Root while in Shared With Me.",
+        } as any);
+        return;
+      }
+      mainChildren = await fetchChildrenFromDrive(
+        accessToken,
+        sharedDriveId,
+        sharedRootItemId
+      );
+    } else {
+      mainChildren = await fetchAllItemsWithPagination(
+        accessToken,
+        mainLibraryPath
+      );
+    }
     const mainFolders = mainChildren.filter((item: any) => item.folder);
     const mainFiles = mainChildren.filter((item: any) => item.file);
 
@@ -217,6 +280,7 @@ async function startBackgroundScan(accessToken: string, userId: string) {
       artist: mainLibraryPath.split("/").pop() || "Unknown",
       extension: file.name.split(".").pop()?.toUpperCase() || "",
       lastModified: file.lastModifiedDateTime || new Date().toISOString(),
+      driveId: driveType === "shared" ? sharedDriveId : undefined,
     }));
     await storeMusicData(userId, mainLibraryPath, {
       files: processedRootFiles,
@@ -252,7 +316,22 @@ async function startBackgroundScan(accessToken: string, userId: string) {
     await setScanState(userId, scanState);
 
     // Start scanning each top-level folder fully (including its subfolders)
-    await scanTopLevelFolders(accessToken, userId, scanState);
+    if (driveType === "shared") {
+      const topLevel = mainFolders.map((f: any) => ({
+        name: f.name,
+        id: f.id,
+      }));
+      await scanTopLevelFoldersShared(
+        accessToken,
+        userId,
+        scanState,
+        sharedDriveId,
+        sharedRootItemId,
+        topLevel
+      );
+    } else {
+      await scanTopLevelFolders(accessToken, userId, scanState);
+    }
   } catch (error) {
     console.error("Error starting background scan:", error);
     await updateScanState(userId, {
@@ -352,6 +431,89 @@ async function scanTopLevelFolders(
   }
 }
 
+// Helper to scan top-level shared folders by ids
+async function scanTopLevelFoldersShared(
+  accessToken: string,
+  userId: string,
+  scanState: ScanState,
+  driveId: string,
+  rootItemId: string,
+  topLevel: Array<{ name: string; id: string }>
+) {
+  try {
+    let freshState = (await getScanState(userId)) || scanState;
+    for (
+      let index = freshState.scannedTopLevelFolders;
+      index < topLevel.length && scanState.isScanning;
+      index++
+    ) {
+      const entry = topLevel[index];
+      const topLevelPath = `${scanState.currentPath}/${entry.name}`;
+      const preState = (await getScanState(userId)) || freshState;
+      preState.currentTopLevelFolder = topLevelPath;
+      preState.currentPath = topLevelPath;
+      preState.lastUpdate = Date.now();
+      await setScanState(userId, preState);
+
+      let scannedOk = false;
+      try {
+        await scanFolderRecursiveShared(
+          accessToken,
+          userId,
+          driveId,
+          entry.id,
+          topLevelPath,
+          freshState
+        );
+        scannedOk = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("401")) {
+          try {
+            const refreshed = await getServerAccessToken();
+            if (refreshed) {
+              await scanFolderRecursiveShared(
+                refreshed,
+                userId,
+                driveId,
+                entry.id,
+                topLevelPath,
+                freshState
+              );
+              scannedOk = true;
+            }
+          } catch (retryErr) {}
+        }
+        if (!scannedOk) {
+          console.error(
+            `Error scanning shared top-level folder ${topLevelPath}:`,
+            err
+          );
+        }
+      }
+
+      const postState = (await getScanState(userId)) || preState;
+      postState.scannedTopLevelFolders = index + 1;
+      postState.scaned = postState.scannedTopLevelFolders;
+      postState.lastUpdate = Date.now();
+      await setScanState(userId, postState);
+      freshState = postState;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+
+    const doneState = (await getScanState(userId)) || freshState;
+    doneState.isScanning = false;
+    doneState.lastUpdate = Date.now();
+    await setScanState(userId, doneState);
+  } catch (error) {
+    console.error("Error in scanTopLevelFoldersShared:", error);
+    await updateScanState(userId, {
+      error: error instanceof Error ? error.message : String(error),
+      isScanning: false,
+    });
+  }
+}
+
 async function scanFolderRecursive(
   accessToken: string,
   userId: string,
@@ -429,6 +591,86 @@ async function scanFolderRecursive(
   }
 }
 
+// Traverse shared drive by item ids instead of path endpoints
+async function scanFolderRecursiveShared(
+  accessToken: string,
+  userId: string,
+  driveId: string,
+  startItemId: string,
+  basePath: string,
+  scanState: ScanState
+) {
+  type QueueNode = { itemId: string; path: string };
+  const queue: QueueNode[] = [{ itemId: startItemId, path: basePath }];
+  const visited = new Set<string>();
+
+  while (queue.length > 0 && scanState.isScanning) {
+    const node = queue.shift()!;
+    if (visited.has(node.itemId)) continue;
+    visited.add(node.itemId);
+
+    try {
+      await updateScanState(userId, { currentPath: node.path });
+    } catch {}
+
+    const allItems = await fetchChildrenFromDrive(
+      accessToken,
+      driveId,
+      node.itemId
+    );
+    const folders = allItems.filter((i: any) => i.folder);
+    const files = allItems.filter((i: any) => i.file);
+
+    const audioFiles = files.filter((item: any) => {
+      const extension = item.name?.split(".").pop()?.toLowerCase();
+      return ["mp3", "wav", "flac", "m4a", "aac", "ogg"].includes(extension);
+    });
+
+    const processedFiles = audioFiles.map((file: any) => ({
+      id: file.id,
+      name: file.name,
+      size: file.size,
+      path: node.path,
+      title: file.name.replace(/\.[^/.]+$/, ""),
+      artist: node.path.split("/").pop() || "Unknown",
+      extension: file.name.split(".").pop()?.toUpperCase() || "",
+      lastModified: file.lastModifiedDateTime || new Date().toISOString(),
+      driveId,
+    }));
+
+    await storeMusicData(userId, node.path, {
+      files: processedFiles,
+      folders: folders.map((folder: any) => ({
+        id: folder.id,
+        name: folder.name,
+        path: node.path,
+        folder: folder.folder,
+      })),
+      lastUpdated: Date.now(),
+    });
+
+    folders.forEach((folder: any) => {
+      const subPath = `${node.path}/${folder.name}`;
+      if (!visited.has(folder.id)) {
+        queue.push({ itemId: folder.id, path: subPath });
+      }
+    });
+
+    const latest = (await getScanState(userId)) || scanState;
+    latest.scannedPaths = Array.from(
+      new Set([...(latest.scannedPaths || []), node.path])
+    );
+    latest.scanedMusicFile =
+      (latest.scanedMusicFile || 0) + processedFiles.length;
+    latest.scanedFolder = (latest.scanedFolder || 0) + 1;
+    latest.currentPath = node.path;
+    latest.lastUpdate = Date.now();
+    await setScanState(userId, latest);
+
+    await new Promise((resolve) => setTimeout(resolve, 75));
+  }
+}
+
 async function fetchAllItemsWithPagination(
   accessToken: string,
   path: string
@@ -448,7 +690,7 @@ async function fetchAllItemsWithPagination(
 
   let currentToken = accessToken;
   while (currentUrl) {
-    let response = await fetch(currentUrl, {
+    let response: Response = await fetch(currentUrl, {
       headers: {
         Authorization: `Bearer ${currentToken}`,
         "Content-Type": "application/json",
@@ -477,10 +719,58 @@ async function fetchAllItemsWithPagination(
       );
     }
 
-    const data = await response.json();
+    const data: any = await response.json();
     allItems.push(...data.value);
 
     // Check if there are more pages
+    currentUrl = data["@odata.nextLink"] || null;
+  }
+
+  return allItems;
+}
+
+async function fetchChildrenFromDrive(
+  accessToken: string,
+  driveId: string,
+  itemId: string
+): Promise<any[]> {
+  const allItems: any[] = [];
+  let currentUrl:
+    | string
+    | null = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/children`;
+  let currentToken = accessToken;
+
+  while (currentUrl) {
+    let response: Response = await fetch(currentUrl, {
+      headers: {
+        Authorization: `Bearer ${currentToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (response.status === 401) {
+      try {
+        const refreshed = await getServerAccessToken();
+        if (refreshed) {
+          currentToken = refreshed;
+          response = await fetch(currentUrl, {
+            headers: {
+              Authorization: `Bearer ${currentToken}`,
+              "Content-Type": "application/json",
+            },
+          });
+        }
+      } catch {}
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `Graph API error: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const data: any = await response.json();
+    allItems.push(...data.value);
     currentUrl = data["@odata.nextLink"] || null;
   }
 
@@ -496,9 +786,36 @@ async function resumeBackgroundScan(accessToken: string, userId: string) {
 
   // Resume from where we left off
   if (await acquireScanLock(userId)) {
-    scanTopLevelFolders(accessToken, userId, scanState).finally(() =>
-      releaseScanLock(userId)
-    );
+    (async () => {
+      try {
+        const settings = await getUserSettings(userId);
+        const driveType = settings?.driveType || "personal";
+        if (driveType === "shared" && settings?.driveId && settings?.itemId) {
+          // Build top-level from current state
+          // We cannot easily reconstruct ids; resume by re-fetching children of root and continuing index
+          const children = await fetchChildrenFromDrive(
+            accessToken,
+            settings.driveId,
+            settings.itemId
+          );
+          const topLevel = children
+            .filter((c: any) => c.folder)
+            .map((c: any) => ({ name: c.name as string, id: c.id as string }));
+          await scanTopLevelFoldersShared(
+            accessToken,
+            userId,
+            scanState,
+            settings.driveId,
+            settings.itemId,
+            topLevel
+          );
+        } else {
+          await scanTopLevelFolders(accessToken, userId, scanState);
+        }
+      } finally {
+        await releaseScanLock(userId);
+      }
+    })();
   }
 
   return {

@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
     const accessToken = await getServerAccessToken();
     const { searchParams } = new URL(request.url);
     const fileId = searchParams.get("fileId");
+    const driveId = searchParams.get("driveId");
 
     if (!accessToken) {
       return NextResponse.json(
@@ -21,27 +22,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get the download URL for the file
-    let downloadResponse = await fetch(
-      `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    // Get the download stream for the file (shared uses drives/{driveId})
+    const buildUrl = () =>
+      driveId
+        ? `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${fileId}/content`
+        : `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`;
+    let downloadResponse = await fetch(buildUrl(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
 
     if (downloadResponse.status === 401) {
       const refreshed = await getServerAccessToken();
       if (refreshed) {
-        downloadResponse = await fetch(
-          `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`,
-          {
-            headers: {
-              Authorization: `Bearer ${refreshed}`,
-            },
-          }
-        );
+        downloadResponse = await fetch(buildUrl(), {
+          headers: {
+            Authorization: `Bearer ${refreshed}`,
+          },
+        });
       }
     }
 

@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
               folder: file.path ?? p,
               lastModified: file.lastModified,
               extension: file.extension,
+              driveId: file.driveId,
             });
           }
         }

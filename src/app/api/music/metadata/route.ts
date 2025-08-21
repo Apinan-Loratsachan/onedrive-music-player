@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
     const accessToken = await getServerAccessToken();
     const { searchParams } = new URL(request.url);
     const fileId = searchParams.get("fileId");
+    const driveId = searchParams.get("driveId");
 
     if (!accessToken) {
       return NextResponse.json(
@@ -25,28 +26,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let downloadResponse = await fetch(
-      `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          // Read only the first ~20MB to capture ID3v2 (front) metadata and cover art
-          //   Range: "bytes=0-20971519",
-        },
-      }
-    );
+    const buildUrl = () =>
+      driveId
+        ? `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${fileId}/content`
+        : `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`;
+    let downloadResponse = await fetch(buildUrl(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        // Range header could be added if partial read desired
+      },
+    });
 
     if (downloadResponse.status === 401) {
       const refreshed = await getServerAccessToken();
       if (refreshed) {
-        downloadResponse = await fetch(
-          `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`,
-          {
-            headers: {
-              Authorization: `Bearer ${refreshed}`,
-            },
-          }
-        );
+        downloadResponse = await fetch(buildUrl(), {
+          headers: {
+            Authorization: `Bearer ${refreshed}`,
+          },
+        });
       }
     }
 

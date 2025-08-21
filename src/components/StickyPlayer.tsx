@@ -24,6 +24,7 @@ interface StickyPlayerProps {
     title?: string;
     artist?: string;
     folder?: string;
+    driveId?: string;
   } | null;
   onNext: () => void;
   onPrevious: () => void;
@@ -89,7 +90,9 @@ export default function StickyPlayer({
 
   useEffect(() => {
     if (currentTrack && audioRef.current) {
-      audioRef.current.src = `/api/music/stream?fileId=${currentTrack.id}`;
+      const params = new URLSearchParams({ fileId: currentTrack.id });
+      if (currentTrack.driveId) params.set("driveId", currentTrack.driveId);
+      audioRef.current.src = `/api/music/stream?${params.toString()}`;
       audioRef.current.load();
     }
   }, [currentTrack]);
@@ -117,12 +120,11 @@ export default function StickyPlayer({
     let isAborted = false;
     (async () => {
       try {
-        const resp = await fetch(
-          `/api/music/metadata?fileId=${currentTrack.id}`,
-          {
-            signal: controller.signal,
-          }
-        );
+        const params = new URLSearchParams({ fileId: currentTrack.id });
+        if (currentTrack.driveId) params.set("driveId", currentTrack.driveId);
+        const resp = await fetch(`/api/music/metadata?${params.toString()}`, {
+          signal: controller.signal,
+        });
         if (!resp.ok) return;
         const data = await resp.json();
         if (isAborted) return;
