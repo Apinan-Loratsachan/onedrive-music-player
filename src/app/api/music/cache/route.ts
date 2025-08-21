@@ -3,6 +3,7 @@ import {
   getAllCachedPaths,
   getCachedData,
   getUserIdFromGraphAPI,
+  getAllCachedPathEntries,
 } from "@/lib/storage";
 import { getServerAccessToken } from "@/lib/auth";
 
@@ -29,15 +30,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const paths = await getAllCachedPaths(userId);
-    const idToTrack = new Map<string, any>();
+    // Pagination parameters
+    const { searchParams } = new URL(request.url);
+    const limitParam = searchParams.get("limit");
+    const cursorParam = searchParams.get("cursor");
+    const limit = Math.min(Math.max(Number(limitParam) || 300, 50), 1000);
 
-    for (const p of paths) {
-      const data = await getCachedData(userId, p);
-      const files = Array.isArray(data?.files) ? data.files : [];
+    // Preload entries to avoid N round-trips
+    const entries = await getAllCachedPathEntries(userId);
+    const totalPaths = entries.length;
+
+    // Build flattened, de-duplicated tracks once per request
+    const idToTrack = new Map<string, any>();
+    for (const { path: p, entry } of entries) {
+      const files = Array.isArray(entry?.files) ? entry.files : [];
       for (const file of files) {
         if (file && typeof file.id === "string") {
-          // Prefer first occurrence; avoid duplicates across paths
           if (!idToTrack.has(file.id)) {
             idToTrack.set(file.id, {
               id: file.id,
@@ -54,10 +62,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const tracks = Array.from(idToTrack.values());
-
-    // Sort by artist then title for a stable list
-    tracks.sort((a, b) => {
+    const allTracks = Array.from(idToTrack.values());
+    // stable sort for deterministic cursoring
+    allTracks.sort((a, b) => {
       const aArtist = (a.artist || "").toLowerCase();
       const bArtist = (b.artist || "").toLowerCase();
       if (aArtist !== bArtist) return aArtist.localeCompare(bArtist);
@@ -66,10 +73,19 @@ export async function GET(request: NextRequest) {
       return aTitle.localeCompare(bTitle);
     });
 
+    // Cursor is a numeric offset into the sorted list
+    const offset = Math.max(Number(cursorParam) || 0, 0);
+    const slice = allTracks.slice(offset, offset + limit);
+    const nextCursor =
+      offset + slice.length < allTracks.length ? offset + slice.length : null;
+
     return NextResponse.json({
-      tracks,
-      total: tracks.length,
-      cachedPaths: paths.length,
+      tracks: slice,
+      total: allTracks.length,
+      cachedPaths: totalPaths,
+      nextCursor,
+      limit,
+      offset,
     });
   } catch (error) {
     console.error("Error reading cache:", error);

@@ -44,6 +44,10 @@ export default function TrackList({
   const [tracks, setTracks] = useState<TrackItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const PAGE_SIZE = 300;
   const [query, setQuery] = useState("");
   const [removePrefix, setRemovePrefix] = useState<boolean>(() => {
     try {
@@ -155,7 +159,7 @@ export default function TrackList({
   });
 
   useEffect(() => {
-    loadFromCache();
+    loadInitialFromCache();
   }, []);
 
   // Note: onRootPathChange is handled by the parent component
@@ -194,16 +198,22 @@ export default function TrackList({
     } catch {}
   }, [selectedLetter]);
 
-  const loadFromCache = async () => {
+  const loadInitialFromCache = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch("/api/music/cache");
+      setTotal(null);
+      setNextCursor(null);
+      const response = await fetch(`/api/music/cache?limit=${PAGE_SIZE}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
       const data = await response.json();
       setTracks(Array.isArray(data.tracks) ? data.tracks : []);
+      setTotal(typeof data.total === "number" ? data.total : null);
+      setNextCursor(
+        typeof data.nextCursor === "number" ? data.nextCursor : null
+      );
     } catch (err) {
       console.error("Failed to load cache:", err);
       setError(
@@ -211,6 +221,41 @@ export default function TrackList({
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreFromCache = async () => {
+    if (isLoadingMore) return;
+    if (nextCursor === null) return;
+    try {
+      setIsLoadingMore(true);
+      const response = await fetch(
+        `/api/music/cache?limit=${PAGE_SIZE}&cursor=${nextCursor}`
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      const newTracks: TrackItem[] = Array.isArray(data.tracks)
+        ? data.tracks
+        : [];
+      setTracks((prev) => {
+        const seen = new Set(prev.map((t) => t.id));
+        const merged = [...prev];
+        for (const t of newTracks) {
+          if (!seen.has(t.id)) merged.push(t);
+        }
+        return merged;
+      });
+      setNextCursor(
+        typeof data.nextCursor === "number" ? data.nextCursor : null
+      );
+      if (typeof data.total === "number") setTotal(data.total);
+    } catch (err) {
+      console.error("Failed to load more cache:", err);
+      // do not set global error to avoid breaking current view
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -329,7 +374,7 @@ export default function TrackList({
           <div className="flex flex-col items-center justify-center">
             <p className="text-red-600 dark:text-red-400">{error}</p>
             <Button
-              onPress={loadFromCache}
+              onPress={loadInitialFromCache}
               startContent={<RefreshCw className="w-4 h-4" />}
             >
               Retry
@@ -363,7 +408,7 @@ export default function TrackList({
       <CardHeader className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3 w-full">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Track List ({alphaFiltered.length} / {tracks.length})
+            Track List ({alphaFiltered.length} / {total ?? tracks.length})
           </h2>
           <div className="flex flex-col gap-2 w-[620px] max-w-full">
             <div className="flex items-center gap-2">
@@ -409,7 +454,7 @@ export default function TrackList({
                 isIconOnly
                 variant="light"
                 size="sm"
-                onPress={loadFromCache}
+                onPress={loadInitialFromCache}
                 startContent={<RefreshCw className="w-4 h-4" />}
               />
             </div>
@@ -451,6 +496,21 @@ export default function TrackList({
           style={{ height: "100%" }}
           data={sortedItems}
           overscan={400}
+          endReached={() => {
+            // Load more when close to end
+            if (!isLoadingMore) {
+              void loadMoreFromCache();
+            }
+          }}
+          components={{
+            Footer: () =>
+              nextCursor !== null ? (
+                <div className="py-3 flex items-center justify-center text-sm text-gray-500">
+                  <Spinner size="sm" />
+                  <span className="ml-2">Loading more...</span>
+                </div>
+              ) : null,
+          }}
           itemContent={(index, t) => (
             <div
               className={`px-6 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${

@@ -161,6 +161,26 @@ export async function getCacheStats(userId: string): Promise<{
   }
 }
 
+// Return all cached path entries in a single Redis call for efficiency
+export async function getAllCachedPathEntries(
+  userId: string
+): Promise<Array<{ path: string; entry: MusicCacheEntry }>> {
+  try {
+    const redis = await getRedisClient();
+    const obj = await redis.hGetAll(keyForMusicCache(userId));
+    const results: Array<{ path: string; entry: MusicCacheEntry }> = [];
+    for (const [path, raw] of Object.entries(obj || {})) {
+      try {
+        const entry = JSON.parse(raw) as MusicCacheEntry;
+        results.push({ path, entry });
+      } catch {}
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 // -------- User-specific scan lock (Redis best-effort) --------
 export async function acquireScanLock(userId: string): Promise<boolean> {
   try {
